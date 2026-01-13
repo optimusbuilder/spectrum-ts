@@ -28,31 +28,33 @@ export type PlatformProviderConfig = {
     __tag: "PlatformProviderConfig"
 }
 
-export type PlatformDef<_SpacesDef extends SpacesDef> = {
+export type PlatformDef<_SpacesDef extends SpacesDef, _ProviderSchema extends z.ZodType<object>, _ConfigBuilder extends (config: z.infer<_ProviderSchema>) => Promise<object>> = {
     name: string;
     spaces: _SpacesDef;
     defaultDirect: KeysBySpaceKindType<_SpacesDef, "direct">;
     defaultGroup: KeysBySpaceKindType<_SpacesDef, "group">;
-    configSchema: z.ZodType<object>;
+    providerSchema: _ProviderSchema;
+    configBuilder: _ConfigBuilder;
+    userBuilder: (_: {config: Awaited<ReturnType<_ConfigBuilder>>}) => Promise<string>;
 };
 
-export type Platform<_PlatformDef extends PlatformDef<any>> = ((
+export type Platform<_PlatformDef extends PlatformDef<any, any, any>> = ((
     spectrum: BaseSpectrum,
 ) => Platform.Spectrum<_PlatformDef>) & ({
-    config(config: z.infer<_PlatformDef["configSchema"]>): PlatformProviderConfig;
+    config(config: z.input<_PlatformDef["providerSchema"]>): PlatformProviderConfig;
 })
 
 namespace Platform {
-    export type Spectrum<_PlatformDef extends PlatformDef<any>> = BaseSpectrum & {
+    export type Spectrum<_PlatformDef extends PlatformDef<any, any, any>> = BaseSpectrum & {
         user(userID: string): void;
     };
 
-    export type User<_PlatformDef extends PlatformDef<any>> = {};
+    export type User<_PlatformDef extends PlatformDef<any, any, any>> = {};
 }
 
-export function definePlatform<_SpacesDef extends SpacesDef>(
-    def: PlatformDef<_SpacesDef>,
-): Platform<PlatformDef<_SpacesDef>> {
+export function definePlatform<_SpacesDef extends SpacesDef, _ProviderSchema extends z.ZodType<object>, _ConfigBuilder extends (config: z.infer<_ProviderSchema>) => Promise<object>>(
+    def: PlatformDef<_SpacesDef, _ProviderSchema, _ConfigBuilder>,
+): Platform<PlatformDef<_SpacesDef, _ProviderSchema, _ConfigBuilder>> {
     return null as any;
 }
 
@@ -68,9 +70,15 @@ const imessage = definePlatform({
     },
     defaultDirect: "dm",
     defaultGroup: "group",
-    configSchema: z.object({
+    providerSchema: z.object({
         useLocal: z.boolean().default(false),
     }),
+    configBuilder: async (config) => {
+        return config
+    },
+    userBuilder: async ({ config }) => {
+        return config.useLocal ? "local" : "remote"
+    }
 });
 
 const spectrum = new Spectrum({
@@ -81,5 +89,5 @@ const spectrum = new Spectrum({
     ]
 })
 
-const imessageSpectrum = imessage(null as unknown as BaseSpectrum);
+const imessageSpectrum = imessage(spectrum);
 const user = await imessageSpectrum.user("");
