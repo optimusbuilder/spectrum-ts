@@ -1,6 +1,7 @@
 import z from "zod";
 import type { PlatformProviderConfig } from "../platform/type";
 import type { Space } from "./space";
+import type { Content } from "./content";
 
 const specturmConfigSchema = z.object({
     projectID: z.string().min(1),
@@ -17,7 +18,7 @@ export class Spectrum {
         this.config = config;
     }
     
-    async send(space: Space) {
+    async send(space: Space, ...content: [Content, ...Content[]]) {
         
     }
 }

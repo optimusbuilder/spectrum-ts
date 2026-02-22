@@ -1,9 +1,10 @@
 import type { Fn, Objects, Pipe } from "hotscript";
 import type z from "zod";
-import { type Spectrum as BaseSpectrum, Spectrum } from "../core/platform";
+import type { Space as BaseSpace } from "../core/space";
+import { type Spectrum as BaseSpectrum, Spectrum } from "../core/spectrum";
 import type { Store } from "../core/store";
 import type { User as BaseUser } from "../core/user";
-import { type Space as BaseSpace } from "../core/space";
+import type { Content } from "../core/content";
 
 export const SpaceKind = {
     Direct: "direct",
@@ -39,7 +40,7 @@ export type PlatformDef<
     _SpacesDef extends SpacesDef,
     _ConfigSchema extends z.ZodType<object>,
     _UserSchema extends z.ZodType<object>,
-    _SpaceSchema extends z.ZodType<object>
+    _SpaceSchema extends z.ZodType<object>,
 > = {
     name: string;
     spaces: _SpacesDef;
@@ -53,7 +54,7 @@ export type PlatformDef<
         resolve: (_: {
             input: {
                 userID: string;
-            }
+            };
             config: z.infer<_ConfigSchema>;
             store: Store;
         }) => Promise<BaseUser & KnownKeys<z.infer<_UserSchema>>>;
@@ -62,11 +63,26 @@ export type PlatformDef<
         schema: _SpaceSchema;
         resolve: (_: {
             input: {
-                users: (BaseUser & KnownKeys<z.infer<_UserSchema>>)[]
-            }
+                users: (BaseUser & KnownKeys<z.infer<_UserSchema>>)[];
+            };
             config: z.infer<_ConfigSchema>;
             store: Store;
         }) => Promise<BaseSpace & KnownKeys<z.infer<_SpaceSchema>>>;
+    };
+    actions: {
+        send: (_: {
+            space: BaseSpace & KnownKeys<z.infer<_SpaceSchema>>;
+            content: Content[];
+            config: z.infer<_ConfigSchema>;
+            store: Store;
+        }) => Promise<void>
+    };
+    hooks?: {
+        afterInit?: (_: {
+            config: z.infer<_ConfigSchema>;
+            store: Store;
+            spectrum: BaseSpectrum;
+        }) => Promise<void>;
     }
 };
 
@@ -83,9 +99,9 @@ export namespace Platform {
         user(userID: string): User<_PlatformDef>;
     } & {
         space(user: User<_PlatformDef>): Space<_PlatformDef>;
-    }
+    };
 
     export type User<_PlatformDef extends AnyPlatformDef> = BaseUser & z.infer<_PlatformDef["user"]["schema"]>;
-    
-    export type Space<_PlatformDef extends AnyPlatformDef> = BaseSpace
+
+    export type Space<_PlatformDef extends AnyPlatformDef> = BaseSpace;
 }
