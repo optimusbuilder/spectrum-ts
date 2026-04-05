@@ -4,6 +4,7 @@ import {
   directChat,
   groupChat,
 } from "@photon-ai/advanced-imessage";
+import { IMessageSDK } from "@photon-ai/imessage-kit";
 import z from "zod";
 import { definePlatform } from "../platform/define";
 
@@ -11,17 +12,20 @@ export const imessage = definePlatform({
   name: "iMessage",
 
   config: z.object({
-    address: z.string(),
-    token: z.string(),
+    local: z.boolean().default(false),
   }),
 
   events: {},
 
   lifecycle: {
     createClient: async ({ config }) => {
+      if (config.local) {
+        return new IMessageSDK();
+      }
+
       return createClient({
-        address: config.address,
-        token: config.token,
+        address: "",
+        token: "",
       });
     },
 

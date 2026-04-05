@@ -9,6 +9,7 @@
   },
   "dependencies": {
     "@photon-ai/advanced-imessage": "^0.1.0",
+    "@photon-ai/imessage-kit": "^2.1.2",
     "better-grpc": "^0.3.2",
     "type-fest": "^5.4.1",
     "zod": "^4.2.1"
