@@ -1,4 +1,5 @@
 import {
+  type AdvancedIMessage,
   chatGuid,
   createClient,
   directChat,
@@ -7,36 +8,56 @@ import {
 import { IMessageSDK } from "@photon-ai/imessage-kit";
 import z from "zod";
 import { definePlatform } from "../platform/define";
-import { fromEmitter } from "../utils/stream";
+import { channel, fromEmitter } from "../utils/stream";
+
+type IMessageClient = IMessageSDK | AdvancedIMessage[];
 
 export const imessage = definePlatform({
   name: "iMessage",
 
-  config: z.object({
-    local: z.boolean().default(false),
-  }),
+  config: z.discriminatedUnion("local", [
+    z.object({
+      local: z.literal(true),
+    }),
+    z.object({
+      local: z.literal(false).default(false),
+      clients: z
+        .union([
+          z.object({ address: z.string(), token: z.string() }),
+          z.array(z.object({ address: z.string(), token: z.string() })),
+        ])
+        .optional(),
+    }),
+  ]),
 
   lifecycle: {
-    createClient: async ({ config }) => {
+    createClient: async ({ config }): Promise<IMessageClient> => {
       if (config.local) {
         return new IMessageSDK();
       }
 
-      return createClient({
-        address: "",
-        token: "",
-      });
+      const raw = config.clients ?? [];
+      const entries = Array.isArray(raw) ? raw : [raw];
+      return entries.map((entry) =>
+        createClient({ address: entry.address, token: entry.token })
+      );
     },
 
     destroyClient: async ({ client }) => {
-      await client.close();
+      if (client instanceof IMessageSDK) {
+        await client.close();
+        return;
+      }
+
+      for (const remote of client) {
+        await remote.close();
+      }
     },
   },
 
   events: {
-    messages({ client, config }) {
-      if (config.local) {
-        const sdk = client as IMessageSDK;
+    messages({ client }) {
+      if (client instanceof IMessageSDK) {
         return fromEmitter<{
           content: { type: "plain_text"; text: string }[];
           platform: "iMessage";
@@ -44,7 +65,7 @@ export const imessage = definePlatform({
           sender: { id: string; __platform: "iMessage" };
           timestamp: Date;
         }>((emit) => {
-          sdk.startWatching({
+          client.startWatching({
             onMessage: (msg) => {
               emit({
                 content: [{ type: "plain_text", text: msg.text ?? "" }],
@@ -59,15 +80,40 @@ export const imessage = definePlatform({
             },
           });
           return () => {
-            sdk.stopWatching();
+            client.stopWatching();
           };
         });
       }
 
-      // Remote mode: advanced-imessage SDK
-      const remote = client as ReturnType<typeof createClient>;
-      const stream = remote.messages.subscribe("message.received");
-      return stream;
+      // Remote mode: merge message streams from all clients
+      const merged = channel<{
+        content: { type: "plain_text"; text: string }[];
+        platform: "iMessage";
+        raw: unknown;
+        sender: { id: string; __platform: "iMessage" };
+        timestamp: Date;
+      }>();
+
+      for (const remote of client) {
+        const stream = remote.messages.subscribe("message.received");
+        (async () => {
+          for await (const event of stream) {
+            const msg = event.message;
+            merged.push({
+              content: [{ type: "plain_text", text: msg?.text ?? "" }],
+              platform: "iMessage",
+              raw: event,
+              sender: {
+                id: msg?.sender?.address ?? "",
+                __platform: "iMessage",
+              },
+              timestamp: event.timestamp,
+            });
+          }
+        })();
+      }
+
+      return merged.iterable;
     },
   },
 
@@ -78,10 +124,16 @@ export const imessage = definePlatform({
         .map((c) => c.text)
         .join("\n");
 
-      await (client as ReturnType<typeof createClient>).messages.send(
-        chatGuid(space.id),
-        text
-      );
+      if (client instanceof IMessageSDK) {
+        await client.send(space.id, text);
+        return;
+      }
+
+      // Send via first available remote client
+      const remote = client[0];
+      if (remote) {
+        await remote.messages.send(chatGuid(space.id), text);
+      }
     },
   },
 
