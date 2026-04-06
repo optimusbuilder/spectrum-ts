@@ -7,6 +7,7 @@ import {
 import { IMessageSDK } from "@photon-ai/imessage-kit";
 import z from "zod";
 import { definePlatform } from "../platform/define";
+import { fromEmitter } from "../utils/stream";
 
 export const imessage = definePlatform({
   name: "iMessage",
@@ -33,11 +34,40 @@ export const imessage = definePlatform({
   },
 
   events: {
-    async *messages({ client }) {
-      const stream = client.messages.subscribe("message.received");
-      for await (const event of stream) {
-        yield event;
+    messages({ client, config }) {
+      if (config.local) {
+        const sdk = client as IMessageSDK;
+        return fromEmitter<{
+          content: { type: "plain_text"; text: string }[];
+          platform: "iMessage";
+          raw: unknown;
+          sender: { id: string; __platform: "iMessage" };
+          timestamp: Date;
+        }>((emit) => {
+          sdk.startWatching({
+            onMessage: (msg) => {
+              emit({
+                content: [{ type: "plain_text", text: msg.text ?? "" }],
+                platform: "iMessage",
+                raw: msg,
+                sender: {
+                  id: msg.sender ?? "",
+                  __platform: "iMessage",
+                },
+                timestamp: msg.date ?? new Date(),
+              });
+            },
+          });
+          return () => {
+            sdk.stopWatching();
+          };
+        });
       }
+
+      // Remote mode: advanced-imessage SDK
+      const remote = client as ReturnType<typeof createClient>;
+      const stream = remote.messages.subscribe("message.received");
+      return stream;
     },
   },
 
@@ -48,7 +78,10 @@ export const imessage = definePlatform({
         .map((c) => c.text)
         .join("\n");
 
-      await client.messages.send(chatGuid(space.id), text);
+      await (client as ReturnType<typeof createClient>).messages.send(
+        chatGuid(space.id),
+        text
+      );
     },
   },
 
