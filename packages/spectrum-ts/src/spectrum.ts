@@ -9,7 +9,7 @@ import type {
 import type { Content } from "./types/content";
 import type { Message as BaseMessage } from "./types/message";
 import type { RichSpace } from "./types/space";
-import { createMessageStream } from "./utils/stream";
+import { channel } from "./utils/stream";
 
 // ---------------------------------------------------------------------------
 // SpectrumInstance — the typed return of Spectrum()
@@ -57,7 +57,7 @@ export function Spectrum<const Providers extends PlatformProviderConfig[]>(
     { client: unknown; config: unknown; definition: AnyPlatformDef }
   >();
 
-  const { push, stream, close } = createMessageStream<[RichSpace, Message]>();
+  const { push, iterable, close } = channel<[RichSpace, Message]>();
 
   // Track running iterators for cancellation
   const runningIterators: AsyncIterator<unknown>[] = [];
@@ -65,7 +65,7 @@ export function Spectrum<const Providers extends PlatformProviderConfig[]>(
   // Custom event streams keyed by event name
   const customEventStreams = new Map<
     string,
-    ReturnType<typeof createMessageStream<unknown>>
+    ReturnType<typeof channel<unknown>>
   >();
 
   let started = false;
@@ -74,7 +74,7 @@ export function Spectrum<const Providers extends PlatformProviderConfig[]>(
   const getOrCreateCustomStream = (eventName: string) => {
     let eventStream = customEventStreams.get(eventName);
     if (!eventStream) {
-      eventStream = createMessageStream<unknown>();
+      eventStream = channel<unknown>();
       customEventStreams.set(eventName, eventStream);
     }
     return eventStream;
@@ -213,7 +213,7 @@ export function Spectrum<const Providers extends PlatformProviderConfig[]>(
 
   const messages: AsyncIterable<[RichSpace, Message]> = {
     [Symbol.asyncIterator]() {
-      const iterator = stream[Symbol.asyncIterator]();
+      const iterator = iterable[Symbol.asyncIterator]();
       let firstNext = true;
       return {
         async next() {
@@ -241,10 +241,10 @@ export function Spectrum<const Providers extends PlatformProviderConfig[]>(
       get(_target, prop: string) {
         const eventStream = customEventStreams.get(prop);
         if (eventStream) {
-          return eventStream.stream;
+          return eventStream.iterable;
         }
-        // Pre-create the stream so it's ready when events start flowing
-        return getOrCreateCustomStream(prop).stream;
+        // Pre-create the channel so it's ready when events start flowing
+        return getOrCreateCustomStream(prop).iterable;
       },
     }
   );

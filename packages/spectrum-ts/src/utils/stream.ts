@@ -1,23 +1,23 @@
-export interface MessageStream<T> {
+export interface Channel<T> {
   close(): void;
-  push(msg: T): void;
-  stream: AsyncIterable<T>;
+  iterable: AsyncIterable<T>;
+  push(value: T): void;
 }
 
-export function createMessageStream<T>(): MessageStream<T> {
+export function channel<T>(): Channel<T> {
   const queue: T[] = [];
   const waiters: Array<(result: IteratorResult<T>) => void> = [];
   let closed = false;
 
-  const push = (msg: T) => {
+  const push = (value: T) => {
     if (closed) {
       return;
     }
     const waiter = waiters.shift();
     if (waiter) {
-      waiter({ value: msg, done: false });
+      waiter({ value, done: false });
     } else {
-      queue.push(msg);
+      queue.push(value);
     }
   };
 
@@ -30,7 +30,7 @@ export function createMessageStream<T>(): MessageStream<T> {
     queue.length = 0;
   };
 
-  const stream: AsyncIterable<T> = {
+  const iterable: AsyncIterable<T> = {
     [Symbol.asyncIterator]() {
       return {
         next(): Promise<IteratorResult<T>> {
@@ -54,18 +54,18 @@ export function createMessageStream<T>(): MessageStream<T> {
     },
   };
 
-  return { push, stream, close };
+  return { push, iterable, close };
 }
 
 export function fromEmitter<T>(
   setup: (emit: (value: T) => void) => (() => void) | undefined
 ): AsyncIterable<T> {
-  const { push, stream, close } = createMessageStream<T>();
+  const { push, iterable, close } = channel<T>();
   const cleanup = setup(push);
 
   return {
     [Symbol.asyncIterator]() {
-      const iter = stream[Symbol.asyncIterator]();
+      const iter = iterable[Symbol.asyncIterator]();
       return {
         next: () => iter.next(),
         return(): Promise<IteratorResult<T>> {
