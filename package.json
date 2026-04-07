@@ -6,9 +6,9 @@
     "examples/*"
   ],
   "devDependencies": {
-    "@biomejs/biome": "2.4.0",
+    "@biomejs/biome": "2.4.10",
     "turbo": "^2",
-    "ultracite": "7.2.3"
+    "ultracite": "7.4.3"
   },
   "scripts": {
     "check": "ultracite check",
