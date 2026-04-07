@@ -96,9 +96,7 @@ const createRemoteMessageStream = (
   );
 };
 
-export const imessage = definePlatform({
-  name: "iMessage",
-
+export const imessage = definePlatform("iMessage", {
   config: z.union([
     z.object({
       local: z.literal(true),

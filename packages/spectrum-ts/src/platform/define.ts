@@ -93,14 +93,18 @@ export function definePlatform<
     }) => AsyncIterable<_MessageType>;
   },
 >(
-  def: PlatformDef<
-    _Name,
-    _ConfigSchema,
-    _UserSchema,
-    _SpaceSchema,
-    _Client,
-    _MessageType,
-    _Events
+  name: _Name,
+  def: Omit<
+    PlatformDef<
+      _Name,
+      _ConfigSchema,
+      _UserSchema,
+      _SpaceSchema,
+      _Client,
+      _MessageType,
+      _Events
+    >,
+    "name"
   >
 ): Platform<
   PlatformDef<
@@ -123,6 +127,8 @@ export function definePlatform<
     _Events
   >;
 
+  const fullDef = { name, ...def };
+
   const platformCache = new WeakMap<SpectrumLike, PlatformInstance<Def>>();
 
   const narrowSpectrum = (spectrum: SpectrumLike) => {
@@ -131,13 +137,13 @@ export function definePlatform<
       return cached;
     }
 
-    const runtime = spectrum.__internal.platforms.get(def.name);
+    const runtime = spectrum.__internal.platforms.get(name);
     if (!runtime) {
-      throw new Error(`Platform "${def.name}" is not registered`);
+      throw new Error(`Platform "${name}" is not registered`);
     }
 
     const instance = createPlatformInstance<Def, _Client, _ConfigSchema>(
-      def as Def & AnyPlatformDef,
+      fullDef as Def & AnyPlatformDef,
       runtime
     );
     platformCache.set(spectrum, instance);
@@ -145,18 +151,18 @@ export function definePlatform<
   };
 
   const narrowSpace = (input: RichSpace) => {
-    if (input.__platform !== def.name) {
+    if (input.__platform !== name) {
       throw new Error(
-        `Expected space from "${def.name}", got "${input.__platform}"`
+        `Expected space from "${name}", got "${input.__platform}"`
       );
     }
     return input as PlatformSpace<Def>;
   };
 
   const narrowMessage = (input: Message) => {
-    if (input.platform !== def.name) {
+    if (input.platform !== name) {
       throw new Error(
-        `Expected message from "${def.name}", got "${input.platform}"`
+        `Expected message from "${name}", got "${input.platform}"`
       );
     }
     return input as PlatformMessage<Def>;
@@ -179,9 +185,9 @@ export function definePlatform<
     return {
       __tag: "PlatformProviderConfig" as const,
       __def: undefined as unknown as Def,
-      __name: def.name,
+      __name: name,
       config,
-      __definition: def as AnyPlatformDef,
+      __definition: fullDef as AnyPlatformDef,
     } satisfies PlatformProviderConfig<Def> as PlatformProviderConfig<Def>;
   };
 

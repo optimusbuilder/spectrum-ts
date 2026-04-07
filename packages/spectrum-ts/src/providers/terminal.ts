@@ -2,9 +2,7 @@ import { createInterface } from "node:readline";
 import z from "zod";
 import { definePlatform } from "../platform/define";
 
-export const terminal = definePlatform({
-  name: "terminal",
-
+export const terminal = definePlatform("terminal", {
   config: z.object({}),
 
   lifecycle: {
