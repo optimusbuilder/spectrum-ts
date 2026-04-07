@@ -9,7 +9,7 @@ import type {
 import type { Content } from "./types/content";
 import type { Message as BaseMessage } from "./types/message";
 import type { RichSpace } from "./types/space";
-import { channel } from "./utils/stream";
+import { type ManagedStream, mergeStreams, stream } from "./utils/stream";
 
 // ---------------------------------------------------------------------------
 // SpectrumInstance — the typed return of Spectrum()
@@ -57,81 +57,11 @@ export function Spectrum<const Providers extends PlatformProviderConfig[]>(
     { client: unknown; config: unknown; definition: AnyPlatformDef }
   >();
 
-  const { push, iterable, close } = channel<[RichSpace, Message]>();
-
-  // Track running iterators for cancellation
-  const runningIterators: AsyncIterator<unknown>[] = [];
-
   // Custom event streams keyed by event name
-  const customEventStreams = new Map<
-    string,
-    ReturnType<typeof channel<unknown>>
-  >();
+  const customEventStreams = new Map<string, ManagedStream<unknown>>();
 
   let initialized = false;
-  let messagesStarted = false;
   let stopped = false;
-  const startedCustomEvents = new Set<string>();
-
-  const getOrCreateCustomStream = (eventName: string) => {
-    let eventStream = customEventStreams.get(eventName);
-    if (!eventStream) {
-      eventStream = channel<unknown>();
-      customEventStreams.set(eventName, eventStream);
-    }
-    return eventStream;
-  };
-
-  const consumeMessages = async (
-    iterable: AsyncIterable<unknown>,
-    def: AnyPlatformDef,
-    client: unknown,
-    userConfig: unknown
-  ) => {
-    const iterator = iterable[Symbol.asyncIterator]();
-    runningIterators.push(iterator);
-    try {
-      let result = await iterator.next();
-      while (!result.done) {
-        const msg = result.value as BaseMessage;
-        const richSpace: RichSpace = {
-          id: msg.sender.id,
-          __platform: def.name,
-          send: async (...content: [Content, ...Content[]]) => {
-            await def.actions.send({
-              space: { id: msg.sender.id, __platform: def.name },
-              content,
-              client,
-              config: userConfig,
-            });
-          },
-        };
-        push([richSpace, msg as Message]);
-        result = await iterator.next();
-      }
-    } catch (_error) {
-      // Stream ended or errored — stop gracefully
-    }
-  };
-
-  const consumeCustomEvent = async (
-    eventName: string,
-    iterable: AsyncIterable<unknown>,
-    platformName: string
-  ) => {
-    const target = getOrCreateCustomStream(eventName);
-    const iterator = iterable[Symbol.asyncIterator]();
-    runningIterators.push(iterator);
-    try {
-      let result = await iterator.next();
-      while (!result.done) {
-        target.push({ ...(result.value as object), platform: platformName });
-        result = await iterator.next();
-      }
-    } catch (_error) {
-      // Stream ended or errored — stop gracefully
-    }
-  };
 
   const initializeOnce = async () => {
     if (initialized) {
@@ -156,70 +86,158 @@ export function Spectrum<const Providers extends PlatformProviderConfig[]>(
     }
   };
 
-  const startMessagesOnce = async () => {
-    if (messagesStarted) {
-      return;
-    }
-    messagesStarted = true;
-    await initializeOnce();
+  const adaptIterable = <T>(iterable: AsyncIterable<T>): ManagedStream<T> => {
+    return stream<T>((emit, end) => {
+      const iterator = iterable[Symbol.asyncIterator]();
 
-    for (const [, state] of platformStates) {
-      const { client, config, definition } = state;
-      const messagesIterable = definition.events.messages({
-        client,
-        config,
-      });
-      consumeMessages(messagesIterable, definition, client, config);
-    }
+      (async () => {
+        try {
+          let result = await iterator.next();
+          while (!result.done) {
+            emit(result.value);
+            result = await iterator.next();
+          }
+          end();
+        } catch (error) {
+          end(error);
+        }
+      })();
+
+      return async () => {
+        await iterator.return?.();
+      };
+    });
   };
 
-  const startCustomEventOnce = async (eventName: string) => {
-    if (startedCustomEvents.has(eventName)) {
-      return;
-    }
-    startedCustomEvents.add(eventName);
-    await initializeOnce();
+  const createProviderMessagesStream = (state: {
+    client: unknown;
+    config: unknown;
+    definition: AnyPlatformDef;
+  }): ManagedStream<[RichSpace, Message]> => {
+    const { client, config, definition } = state;
+    const providerMessages = definition.events.messages({
+      client,
+      config,
+    }) as AsyncIterable<BaseMessage>;
 
-    for (const [, state] of platformStates) {
-      const { client, config, definition } = state;
-      const producer = definition.events[eventName] as
-        | ((ctx: {
-            client: unknown;
-            config: unknown;
-          }) => AsyncIterable<unknown>)
-        | undefined;
-      if (producer) {
-        const iterable = producer({ client, config });
-        consumeCustomEvent(eventName, iterable, definition.name);
+    const normalizeMessages = async function* (): AsyncIterable<
+      [RichSpace, Message]
+    > {
+      for await (const msg of providerMessages) {
+        const richSpace: RichSpace = {
+          id: msg.sender.id,
+          __platform: definition.name,
+          send: async (...content: [Content, ...Content[]]) => {
+            await definition.actions.send({
+              space: { id: msg.sender.id, __platform: definition.name },
+              content,
+              client,
+              config,
+            });
+          },
+        };
+
+        yield [richSpace, msg as Message];
       }
-    }
+    };
+
+    return adaptIterable(normalizeMessages());
   };
+
+  const createMessagesStream = (): ManagedStream<[RichSpace, Message]> => {
+    return stream<[RichSpace, Message]>(async (emit, end) => {
+      await initializeOnce();
+      const merged = mergeStreams(
+        Array.from(platformStates.values(), createProviderMessagesStream)
+      );
+
+      (async () => {
+        try {
+          for await (const value of merged) {
+            emit(value);
+          }
+          end();
+        } catch (error) {
+          end(error);
+        }
+      })();
+
+      return async () => {
+        await merged.close();
+      };
+    });
+  };
+
+  const createCustomEventStream = (
+    eventName: string
+  ): ManagedStream<unknown> => {
+    return stream<unknown>(async (emit, end) => {
+      await initializeOnce();
+      const providerStreams = Array.from(platformStates.values(), (state) => {
+        const { client, config, definition } = state;
+        const producer = definition.events[eventName] as
+          | ((ctx: {
+              client: unknown;
+              config: unknown;
+            }) => AsyncIterable<unknown>)
+          | undefined;
+        if (!producer) {
+          return undefined;
+        }
+
+        const providerEvents = producer({ client, config });
+        const annotatePlatform = async function* (): AsyncIterable<unknown> {
+          for await (const value of providerEvents) {
+            yield { ...(value as object), platform: definition.name };
+          }
+        };
+
+        return adaptIterable(annotatePlatform());
+      }).filter(
+        (value): value is ManagedStream<unknown> => value !== undefined
+      );
+
+      const merged = mergeStreams(providerStreams);
+
+      (async () => {
+        try {
+          for await (const value of merged) {
+            emit(value);
+          }
+          end();
+        } catch (error) {
+          end(error);
+        }
+      })();
+
+      return async () => {
+        await merged.close();
+      };
+    });
+  };
+
+  const messagesStream = createMessagesStream();
 
   const stopOnce = async () => {
     if (stopped) {
       return;
     }
     stopped = true;
-    close();
-
-    // Close all custom event streams
-    for (const [, eventStream] of customEventStreams) {
-      eventStream.close();
-    }
-    customEventStreams.clear();
-
-    const iteratorShutdowns = runningIterators.map((iterator) =>
-      Promise.resolve(iterator.return?.({ value: undefined, done: true }))
-    );
-    runningIterators.length = 0;
 
     const clientShutdowns = Array.from(platformStates.values(), (state) =>
       state.definition.lifecycle.destroyClient({
         client: state.client,
       })
     );
+    const streamShutdowns = [
+      messagesStream.close(),
+      ...Array.from(customEventStreams.values(), (eventStream) =>
+        eventStream.close()
+      ),
+    ];
 
-    await Promise.allSettled([...iteratorShutdowns, ...clientShutdowns]);
+    await Promise.allSettled([...streamShutdowns, ...clientShutdowns]);
+    customEventStreams.clear();
     platformStates.clear();
   };
 
@@ -229,59 +247,19 @@ export function Spectrum<const Providers extends PlatformProviderConfig[]>(
   process.on("SIGINT", handleSignal);
   process.on("SIGTERM", handleSignal);
 
-  const messages: AsyncIterable<[RichSpace, Message]> = {
-    [Symbol.asyncIterator]() {
-      const iterator = iterable[Symbol.asyncIterator]();
-      let firstNext = true;
-      return {
-        async next() {
-          if (firstNext) {
-            firstNext = false;
-            await startMessagesOnce();
-          }
-          return iterator.next();
-        },
-        async return() {
-          await stopOnce();
-          return {
-            value: undefined as unknown as [RichSpace, Message],
-            done: true as const,
-          };
-        },
-      };
-    },
-  };
+  const messages = messagesStream as AsyncIterable<[RichSpace, Message]>;
 
   // Proxy for flat custom event access (app.typing, app.readReceipt, etc.)
   const customEventProxy = new Proxy(
     {} as Record<string, AsyncIterable<unknown>>,
     {
       get(_target, prop: string) {
-        const eventStream = customEventStreams.get(prop);
-        const iterable =
-          eventStream?.iterable ?? getOrCreateCustomStream(prop).iterable;
-
-        return {
-          [Symbol.asyncIterator]() {
-            const iterator = iterable[Symbol.asyncIterator]();
-            let firstNext = true;
-            return {
-              async next() {
-                if (firstNext) {
-                  firstNext = false;
-                  await startCustomEventOnce(prop);
-                }
-                return iterator.next();
-              },
-              async return() {
-                return (
-                  iterator.return?.() ??
-                  Promise.resolve({ value: undefined, done: true })
-                );
-              },
-            };
-          },
-        };
+        let eventStream = customEventStreams.get(prop);
+        if (!eventStream) {
+          eventStream = createCustomEventStream(prop);
+          customEventStreams.set(prop, eventStream);
+        }
+        return eventStream;
       },
     }
   );

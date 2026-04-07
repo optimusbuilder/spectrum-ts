@@ -9,7 +9,7 @@ import {
 import { IMessageSDK } from "@photon-ai/imessage-kit";
 import z from "zod";
 import { definePlatform } from "../platform/define";
-import { mergeStreams, stream } from "../utils/stream";
+import { type ManagedStream, mergeStreams, stream } from "../utils/stream";
 
 type IMessageClient = IMessageSDK | AdvancedIMessage[];
 type RemoteMessageEvent = Extract<MessageEvent, { type: "message.received" }>;
@@ -31,6 +31,70 @@ const toIMessageMessage = (event: RemoteMessageEvent): IMessageMessage => ({
   },
   timestamp: event.timestamp,
 });
+
+const createLocalMessageStream = (
+  client: IMessageSDK
+): ManagedStream<IMessageMessage> => {
+  return stream<IMessageMessage>((emit) => {
+    client.startWatching({
+      onMessage: (msg) => {
+        emit({
+          content: [{ type: "plain_text", text: msg.text ?? "" }],
+          platform: "iMessage",
+          raw: msg,
+          sender: {
+            id: msg.sender ?? "",
+            __platform: "iMessage",
+          },
+          timestamp: msg.date ?? new Date(),
+        });
+      },
+    });
+
+    return () => {
+      client.stopWatching();
+    };
+  });
+};
+
+const createRemoteClientMessageStream = (
+  client: AdvancedIMessage
+): ManagedStream<RemoteMessageEvent> => {
+  return stream<RemoteMessageEvent>((emit, end) => {
+    const subscription = client.messages.subscribe("message.received");
+
+    (async () => {
+      try {
+        for await (const event of subscription) {
+          emit(event);
+        }
+        end();
+      } catch (error) {
+        end(error);
+      }
+    })();
+
+    return async () => {
+      await subscription.close();
+    };
+  });
+};
+
+const normalizeRemoteMessages = async function* (
+  source: AsyncIterable<RemoteMessageEvent>
+): AsyncIterable<IMessageMessage> {
+  for await (const event of source) {
+    yield toIMessageMessage(event);
+  }
+};
+
+const createRemoteMessageStream = (
+  clients: AdvancedIMessage[]
+): AsyncIterable<IMessageMessage> => {
+  return normalizeRemoteMessages(
+    mergeStreams(clients.map(createRemoteClientMessageStream))
+  );
+};
 
 export const imessage = definePlatform({
   name: "iMessage",
@@ -82,55 +146,10 @@ export const imessage = definePlatform({
   events: {
     messages({ client }) {
       if (client instanceof IMessageSDK) {
-        return stream<IMessageMessage>((emit) => {
-          client.startWatching({
-            onMessage: (msg) => {
-              emit({
-                content: [{ type: "plain_text", text: msg.text ?? "" }],
-                platform: "iMessage",
-                raw: msg,
-                sender: {
-                  id: msg.sender ?? "",
-                  __platform: "iMessage",
-                },
-                timestamp: msg.date ?? new Date(),
-              });
-            },
-          });
-          return () => {
-            client.stopWatching();
-          };
-        });
+        return createLocalMessageStream(client);
       }
 
-      const remoteStreams = client.map((remote) =>
-        stream<RemoteMessageEvent>((emit, end) => {
-          const subscription = remote.messages.subscribe("message.received");
-
-          (async () => {
-            try {
-              for await (const event of subscription) {
-                emit(event);
-              }
-              end();
-            } catch (error) {
-              end(error);
-            }
-          })();
-
-          return async () => {
-            await subscription.close();
-          };
-        })
-      );
-
-      return {
-        async *[Symbol.asyncIterator]() {
-          for await (const event of mergeStreams(remoteStreams)) {
-            yield toIMessageMessage(event);
-          }
-        },
-      };
+      return createRemoteMessageStream(client);
     },
   },
 
