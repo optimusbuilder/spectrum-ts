@@ -229,13 +229,17 @@ export async function Spectrum<
       ),
     ];
 
-    await Promise.allSettled([...streamShutdowns, ...clientShutdowns]);
+    process.off("SIGINT", handleSignal);
+    process.off("SIGTERM", handleSignal);
+
+    await Promise.allSettled(streamShutdowns);
+    await Promise.allSettled(clientShutdowns);
     customEventStreams.clear();
     platformStates.clear();
   };
 
   const handleSignal = () => {
-    stopOnce();
+    stopOnce().catch(() => undefined);
   };
   process.on("SIGINT", handleSignal);
   process.on("SIGTERM", handleSignal);

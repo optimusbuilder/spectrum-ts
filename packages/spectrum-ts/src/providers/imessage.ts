@@ -64,6 +64,7 @@ const createRemoteClientMessageStream = (
 ): ManagedStream<RemoteMessageEvent> => {
   return stream<RemoteMessageEvent>((emit, end) => {
     const subscription = client.messages.subscribe("message.received");
+    let closing = false;
 
     (async () => {
       try {
@@ -72,11 +73,16 @@ const createRemoteClientMessageStream = (
         }
         end();
       } catch (error) {
+        if (closing) {
+          end();
+          return;
+        }
         end(error);
       }
     })();
 
     return async () => {
+      closing = true;
       await subscription.close();
     };
   });
