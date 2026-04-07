@@ -7,10 +7,13 @@ export type IMessageClient = IMessageSDK | AdvancedIMessage[];
 
 const clientEntry = z.object({ address: z.string(), token: z.string() });
 
-export const configSchema = z.object({
-  local: z.boolean().optional().default(false),
-  clients: clientEntry.or(z.array(clientEntry)).optional(),
-});
+export const configSchema = z.union([
+  z.object({ local: z.literal(true) }),
+  z.object({
+    local: z.literal(false).optional().default(false),
+    clients: clientEntry.or(z.array(clientEntry)).optional(),
+  }),
+]);
 
 export const userSchema = z.object({});
 
