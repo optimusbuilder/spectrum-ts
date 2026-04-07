@@ -11,6 +11,11 @@ type ResolvedUser = Pick<User, "id">;
 type AwaitedReturn<T> = T extends (...args: never[]) => Promise<infer R>
   ? R
   : never;
+type SchemaInfer<T> = T extends { schema?: infer S extends z.ZodType<object> }
+  ? z.infer<S>
+  : Record<never, never>;
+type InferSchema<TSchema> =
+  TSchema extends z.ZodType<object> ? z.infer<TSchema> : Record<never, never>;
 
 type SchemaInput<T> = T extends { schema?: infer S extends z.ZodType }
   ? z.input<S>
@@ -25,6 +30,17 @@ export type EventProducer<
   TClient = unknown,
   TConfig = unknown,
 > = (ctx: { client: TClient; config: TConfig }) => AsyncIterable<TPayload>;
+
+export type ProviderMessage<
+  TSender extends ResolvedUser = ResolvedUser,
+  TSpace extends ResolvedSpace = ResolvedSpace,
+  TExtra extends object = Record<never, never>,
+> = {
+  content: Content[];
+  sender: TSender;
+  space: TSpace;
+  timestamp?: Date;
+} & TExtra;
 
 type InferEventPayload<T> = T extends (ctx: never) => AsyncIterable<infer P>
   ? P
@@ -48,7 +64,16 @@ export interface PlatformDef<
   _Client = unknown,
   _ResolvedUser extends ResolvedUser = ResolvedUser,
   _ResolvedSpace extends ResolvedSpace = ResolvedSpace,
-  _MessageType = unknown,
+  _MessageSchema extends z.ZodType<object> | undefined = undefined,
+  _MessageType extends ProviderMessage<
+    _ResolvedUser,
+    _ResolvedSpace,
+    InferSchema<_MessageSchema>
+  > = ProviderMessage<
+    _ResolvedUser,
+    _ResolvedSpace,
+    InferSchema<_MessageSchema>
+  >,
   _Events extends {
     messages: EventProducer<_MessageType, _Client, z.infer<_ConfigSchema>>;
   } = {
@@ -74,7 +99,7 @@ export interface PlatformDef<
   };
 
   message?: {
-    schema?: z.ZodType<object>;
+    schema?: _MessageSchema;
   };
   name: _Name;
 
@@ -258,7 +283,7 @@ export type PlatformSpace<Def extends AnyPlatformDef> = Omit<
   Space;
 
 export type PlatformMessage<Def extends AnyPlatformDef> = Omit<
-  InferEventPayload<Def["events"]["messages"]>,
+  SchemaInfer<Def["message"]>,
   keyof Message
 > &
   Message<Def["name"], PlatformUser<Def>, PlatformSpace<Def>>;

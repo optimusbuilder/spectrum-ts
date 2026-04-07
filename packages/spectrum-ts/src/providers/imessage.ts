@@ -9,30 +9,23 @@ import {
 import { IMessageSDK } from "@photon-ai/imessage-kit";
 import z from "zod";
 import { definePlatform } from "../platform/define";
+import type { ProviderMessage } from "../platform/types";
 import { type ManagedStream, mergeStreams, stream } from "../utils/stream";
 
 type IMessageClient = IMessageSDK | AdvancedIMessage[];
 type RemoteMessageEvent = Extract<MessageEvent, { type: "message.received" }>;
-interface IMessageMessage {
-  content: { type: "plain_text"; text: string }[];
-  platform: "iMessage";
-  raw: unknown;
-  sender: { id: string; __platform: "iMessage" };
-  space: { id: string; __platform: "iMessage"; type: "dm" | "group" };
-  timestamp: Date;
-}
+type IMessageMessage = ProviderMessage<
+  { id: string },
+  { id: string; type: "dm" | "group" }
+>;
 
 const toIMessageMessage = (event: RemoteMessageEvent): IMessageMessage => ({
   content: [{ type: "plain_text", text: event.message.text ?? "" }],
-  platform: "iMessage",
-  raw: event,
   sender: {
     id: event.message.sender?.address ?? "",
-    __platform: "iMessage",
   },
   space: {
     id: event.chatGuid,
-    __platform: "iMessage",
     type: event.chatGuid.includes(";+;") ? "group" : "dm",
   },
   timestamp: event.timestamp,
@@ -46,15 +39,11 @@ const createLocalMessageStream = (
       onMessage: (msg) => {
         emit({
           content: [{ type: "plain_text", text: msg.text ?? "" }],
-          platform: "iMessage",
-          raw: msg,
           sender: {
             id: msg.sender ?? "",
-            __platform: "iMessage",
           },
           space: {
             id: msg.sender ?? "",
-            __platform: "iMessage",
             type: "dm",
           },
           timestamp: msg.date ?? new Date(),
@@ -140,11 +129,17 @@ export const imessage = definePlatform("iMessage", {
       type: z.enum(["dm", "group"]),
     }),
     resolve: async ({ input }) => {
-      const id =
-        input.options.type === "dm"
-          ? directChat(input.users[0]?.id ?? "")
-          : groupChat("");
-      return { id: id as string };
+      if (input.options.type === "dm") {
+        return {
+          id: directChat(input.users[0]?.id ?? "") as string,
+          type: "dm",
+        };
+      }
+
+      return {
+        id: groupChat("") as string,
+        type: "group",
+      };
     },
   },
 

@@ -11,6 +11,7 @@ import type {
   PlatformProviderConfig,
   PlatformSpace,
   PlatformUser,
+  ProviderMessage,
   SpectrumLike,
 } from "./types";
 
@@ -91,8 +92,26 @@ export function definePlatform<
   _Client,
   _ResolvedUser extends { id: string },
   _ResolvedSpace extends { id: string },
-  _MessageType,
+  _MessageSchema extends z.ZodType<object> | undefined = undefined,
+  _MessageType extends ProviderMessage<
+    _ResolvedUser,
+    _ResolvedSpace,
+    _MessageSchema extends z.ZodType<object>
+      ? z.infer<_MessageSchema>
+      : Record<never, never>
+  > = ProviderMessage<
+    _ResolvedUser,
+    _ResolvedSpace,
+    _MessageSchema extends z.ZodType<object>
+      ? z.infer<_MessageSchema>
+      : Record<never, never>
+  >,
   _Events extends {
+    messages: (ctx: {
+      client: _Client;
+      config: z.infer<_ConfigSchema>;
+    }) => AsyncIterable<_MessageType>;
+  } = {
     messages: (ctx: {
       client: _Client;
       config: z.infer<_ConfigSchema>;
@@ -109,6 +128,7 @@ export function definePlatform<
       _Client,
       _ResolvedUser,
       _ResolvedSpace,
+      _MessageSchema,
       _MessageType,
       _Events
     >,
@@ -123,6 +143,7 @@ export function definePlatform<
     _Client,
     _ResolvedUser,
     _ResolvedSpace,
+    _MessageSchema,
     _MessageType,
     _Events
   >
@@ -135,6 +156,7 @@ export function definePlatform<
     _Client,
     _ResolvedUser,
     _ResolvedSpace,
+    _MessageSchema,
     _MessageType,
     _Events
   >;
@@ -187,7 +209,7 @@ export function definePlatform<
     if ("__platform" in input && "send" in input) {
       return narrowSpace(input as Space);
     }
-    if ("platform" in input && "raw" in input) {
+    if ("platform" in input && "sender" in input && "space" in input) {
       return narrowMessage(input as Message);
     }
     throw new Error("Invalid input to platform narrowing function");

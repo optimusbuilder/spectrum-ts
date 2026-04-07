@@ -9,7 +9,6 @@ export interface Message<
 > {
   content: Content[];
   platform: TPlatform;
-  raw: unknown;
   sender: TSender;
   space: TSpace;
   timestamp: Date;

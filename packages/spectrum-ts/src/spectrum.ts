@@ -10,6 +10,20 @@ import type { Message } from "./types/message";
 import type { Space } from "./types/space";
 import { type ManagedStream, mergeStreams, stream } from "./utils/stream";
 
+type ProviderMessageRecord = {
+  content: Content[];
+  sender: { id: string } & Record<string, unknown>;
+  space: { id: string } & Record<string, unknown>;
+  timestamp?: Date;
+} & Record<string, unknown>;
+
+const providerMessageCoreKeys = new Set([
+  "content",
+  "sender",
+  "space",
+  "timestamp",
+]);
+
 // ---------------------------------------------------------------------------
 // SpectrumInstance — the typed return of Spectrum()
 // ---------------------------------------------------------------------------
@@ -109,20 +123,45 @@ export async function Spectrum<
     const raw = definition.events.messages({
       client,
       config,
-    }) as AsyncIterable<Message>;
+    }) as AsyncIterable<ProviderMessageRecord>;
 
     const bindSend = async function* (): AsyncIterable<[Space, Message]> {
       for await (const msg of raw) {
-        const ref = { id: msg.space.id, __platform: msg.space.__platform };
-        msg.space.send = async (...content: [Content, ...Content[]]) => {
-          await definition.actions.send({
-            space: ref,
-            content,
-            client,
-            config,
-          });
+        const extraEntries = Object.entries(msg).filter(
+          ([key]) => !providerMessageCoreKeys.has(key)
+        );
+        const extra = Object.fromEntries(extraEntries);
+        const parsedExtra = definition.message?.schema
+          ? definition.message.schema.parse(extra)
+          : {};
+        const spaceRef = {
+          ...msg.space,
+          __platform: definition.name,
         };
-        yield [msg.space, msg];
+        const space = {
+          ...spaceRef,
+          send: async (...content: [Content, ...Content[]]) => {
+            await definition.actions.send({
+              space: spaceRef,
+              content,
+              client,
+              config,
+            });
+          },
+        };
+        const normalizedMessage = {
+          ...parsedExtra,
+          content: msg.content,
+          platform: definition.name,
+          sender: {
+            ...msg.sender,
+            __platform: definition.name,
+          },
+          space,
+          timestamp: msg.timestamp ?? new Date(),
+        };
+
+        yield [space, normalizedMessage];
       }
     };
 

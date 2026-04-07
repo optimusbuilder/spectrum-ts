@@ -43,10 +43,8 @@ export const terminal = definePlatform("terminal", {
       for await (const line of client) {
         yield {
           content: [{ type: "plain_text" as const, text: line }],
-          platform: "terminal",
-          raw: line,
-          sender: { id: "terminal-user", __platform: "terminal" as const },
-          space: { id: "terminal", __platform: "terminal" as const },
+          sender: { id: "terminal-user" },
+          space: { id: "terminal" },
           timestamp: new Date(),
         };
       }
