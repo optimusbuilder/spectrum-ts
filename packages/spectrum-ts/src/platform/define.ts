@@ -1,7 +1,7 @@
 import type z from "zod";
 import type { Content } from "../types/content";
 import type { Message } from "../types/message";
-import type { RichSpace } from "../types/space";
+import type { Space } from "../types/space";
 import type {
   AnyPlatformDef,
   Platform,
@@ -150,7 +150,7 @@ export function definePlatform<
     return instance;
   };
 
-  const narrowSpace = (input: RichSpace) => {
+  const narrowSpace = (input: Space) => {
     if (input.__platform !== name) {
       throw new Error(
         `Expected space from "${name}", got "${input.__platform}"`
@@ -168,12 +168,12 @@ export function definePlatform<
     return input as PlatformMessage<Def>;
   };
 
-  const narrower = ((input: SpectrumLike | RichSpace | Message) => {
+  const narrower = ((input: SpectrumLike | Space | Message) => {
     if ("__providers" in input && "__internal" in input) {
       return narrowSpectrum(input as SpectrumLike);
     }
     if ("__platform" in input && "send" in input) {
-      return narrowSpace(input as RichSpace);
+      return narrowSpace(input as Space);
     }
     if ("platform" in input && "raw" in input) {
       return narrowMessage(input as Message);

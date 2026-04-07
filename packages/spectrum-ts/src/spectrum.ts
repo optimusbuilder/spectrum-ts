@@ -8,7 +8,7 @@ import type {
 } from "./platform/types";
 import type { Content } from "./types/content";
 import type { Message as BaseMessage } from "./types/message";
-import type { RichSpace } from "./types/space";
+import type { Space } from "./types/space";
 import { type ManagedStream, mergeStreams, stream } from "./utils/stream";
 
 // ---------------------------------------------------------------------------
@@ -19,9 +19,9 @@ export type SpectrumInstance<
   Providers extends PlatformProviderConfig[] = PlatformProviderConfig[],
 > = SpectrumLike<Providers> &
   CustomEventStreams<Providers> & {
-    readonly messages: AsyncIterable<[RichSpace, UnifiedMessage<Providers>]>;
+    readonly messages: AsyncIterable<[Space, UnifiedMessage<Providers>]>;
     stop(): Promise<void>;
-    send(space: RichSpace, ...content: [Content, ...Content[]]): Promise<void>;
+    send(space: Space, ...content: [Content, ...Content[]]): Promise<void>;
   };
 
 // ---------------------------------------------------------------------------
@@ -107,7 +107,7 @@ export async function Spectrum<
     client: unknown;
     config: unknown;
     definition: AnyPlatformDef;
-  }): ManagedStream<[RichSpace, Message]> => {
+  }): ManagedStream<[Space, Message]> => {
     const { client, config, definition } = state;
     const providerMessages = definition.events.messages({
       client,
@@ -115,10 +115,10 @@ export async function Spectrum<
     }) as AsyncIterable<BaseMessage>;
 
     const normalizeMessages = async function* (): AsyncIterable<
-      [RichSpace, Message]
+      [Space, Message]
     > {
       for await (const msg of providerMessages) {
-        const richSpace: RichSpace = {
+        const resolvedSpace: Space = {
           id: msg.sender.id,
           __platform: definition.name,
           send: async (...content: [Content, ...Content[]]) => {
@@ -131,15 +131,15 @@ export async function Spectrum<
           },
         };
 
-        yield [richSpace, msg as Message];
+        yield [resolvedSpace, msg as Message];
       }
     };
 
     return adaptIterable(normalizeMessages());
   };
 
-  const createMessagesStream = (): ManagedStream<[RichSpace, Message]> => {
-    return stream<[RichSpace, Message]>(async (emit, end) => {
+  const createMessagesStream = (): ManagedStream<[Space, Message]> => {
+    return stream<[Space, Message]>(async (emit, end) => {
       const merged = mergeStreams(
         Array.from(platformStates.values(), createProviderMessagesStream)
       );
@@ -239,7 +239,7 @@ export async function Spectrum<
   process.on("SIGINT", handleSignal);
   process.on("SIGTERM", handleSignal);
 
-  const messages = messagesStream as AsyncIterable<[RichSpace, Message]>;
+  const messages = messagesStream as AsyncIterable<[Space, Message]>;
 
   // Proxy for flat custom event access (app.typing, app.readReceipt, etc.)
   const customEventProxy = new Proxy(
@@ -261,7 +261,7 @@ export async function Spectrum<
     __internal: { platforms: platformStates },
     messages,
     stop: stopOnce,
-    send: async (space: RichSpace, ...content: [Content, ...Content[]]) => {
+    send: async (space: Space, ...content: [Content, ...Content[]]) => {
       await space.send(...content);
     },
   };

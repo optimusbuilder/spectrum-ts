@@ -2,7 +2,10 @@ import type { Fn, Pipe, Tuples } from "hotscript";
 import type z from "zod";
 import type { Content } from "../types/content";
 import type { Message } from "../types/message";
-import type { RichSpace, Space } from "../types/space";
+import type { Space } from "../types/space";
+
+type SpaceRef = Pick<Space, "id" | "__platform">;
+
 import type { User } from "../types/user";
 
 // ---------------------------------------------------------------------------
@@ -64,7 +67,7 @@ export interface PlatformDef<
 > {
   actions: {
     send: (_: {
-      space: Space;
+      space: SpaceRef;
       content: Content[];
       client: _Client;
       config: z.infer<_ConfigSchema>;
@@ -94,7 +97,7 @@ export interface PlatformDef<
       };
       client: _Client;
       config: z.infer<_ConfigSchema>;
-    }) => Promise<Space>;
+    }) => Promise<SpaceRef>;
   };
 
   user: {
@@ -271,7 +274,7 @@ export type CustomEventStreams<Providers extends PlatformProviderConfig[]> = {
 // Platform-specific Space, Message, and User types
 // ---------------------------------------------------------------------------
 
-export type PlatformSpace<_Def extends AnyPlatformDef> = RichSpace;
+export type PlatformSpace<_Def extends AnyPlatformDef> = Space<_Def>;
 
 export type PlatformMessage<Def extends AnyPlatformDef> = Message &
   KnownKeys<SchemaInfer<Def["message"]>> & {
@@ -329,7 +332,7 @@ export interface Platform<Def extends AnyPlatformDef> {
     ? PlatformInstance<Def>
     : never;
 
-  (space: RichSpace): PlatformSpace<Def>;
+  (space: Space): PlatformSpace<Def>;
 
   (message: Message): PlatformMessage<Def>;
 }
