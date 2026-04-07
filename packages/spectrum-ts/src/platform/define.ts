@@ -23,6 +23,51 @@ function createPlatformInstance<
   def: Def,
   runtime: { client: unknown; config: unknown }
 ): PlatformInstance<Def> {
+  const isPlatformUser = (value: unknown): value is PlatformUser<Def> => {
+    return (
+      typeof value === "object" &&
+      value !== null &&
+      "__platform" in value &&
+      (value as { __platform?: unknown }).__platform === def.name
+    );
+  };
+
+  const normalizeSpaceArgs = (
+    args: unknown[]
+  ): { users: PlatformUser<Def>[]; params: unknown } => {
+    if (args.length === 0) {
+      return { users: [], params: undefined };
+    }
+
+    const [first, ...rest] = args;
+    if (Array.isArray(first)) {
+      return {
+        users: first as PlatformUser<Def>[],
+        params: rest[0],
+      };
+    }
+
+    if (!isPlatformUser(first)) {
+      return {
+        users: [],
+        params: first,
+      };
+    }
+
+    const last = args.at(-1);
+    if (last !== undefined && !isPlatformUser(last)) {
+      return {
+        users: args.slice(0, -1) as PlatformUser<Def>[],
+        params: last,
+      };
+    }
+
+    return {
+      users: args as PlatformUser<Def>[],
+      params: undefined,
+    };
+  };
+
   const base = {
     async user(userID: string) {
       const resolved = await def.user.resolve({
@@ -36,21 +81,26 @@ function createPlatformInstance<
       } as PlatformUser<Def>;
     },
 
-    async space(users: PlatformUser<Def>[], options: unknown) {
-      const parsedOptions = def.space.schema
-        ? def.space.schema.parse(options)
-        : options;
+    async space(...args: unknown[]) {
+      const { users, params } = normalizeSpaceArgs(args);
+      let parsedParams = params;
+      if (params !== undefined && def.space.params) {
+        parsedParams = def.space.params.parse(params);
+      }
       const resolved = await def.space.resolve({
-        input: { users, options: parsedOptions },
+        input: { users, params: parsedParams },
         client: runtime.client as _Client,
         config: runtime.config as z.infer<_ConfigSchema>,
       });
+      const parsedSpace = def.space.schema
+        ? def.space.schema.parse(resolved)
+        : resolved;
       const spaceRef = {
-        id: resolved.id,
+        id: parsedSpace.id,
         __platform: def.name,
       };
       return {
-        ...resolved,
+        ...parsedSpace,
         ...spaceRef,
         send: async (...content: [Content, ...Content[]]) => {
           await def.actions.send({
@@ -87,8 +137,9 @@ function createPlatformInstance<
 export function definePlatform<
   _Name extends string,
   _ConfigSchema extends z.ZodType<object>,
-  _UserSchema extends z.ZodType<object>,
-  _SpaceSchema extends z.ZodType<object>,
+  _UserSchema extends z.ZodType<object> | undefined,
+  _SpaceSchema extends z.ZodType<object> | undefined,
+  _SpaceParamsSchema extends z.ZodType<object> | undefined,
   _Client,
   _ResolvedUser extends { id: string },
   _ResolvedSpace extends { id: string },
@@ -125,6 +176,7 @@ export function definePlatform<
       _ConfigSchema,
       _UserSchema,
       _SpaceSchema,
+      _SpaceParamsSchema,
       _Client,
       _ResolvedUser,
       _ResolvedSpace,
@@ -140,6 +192,7 @@ export function definePlatform<
     _ConfigSchema,
     _UserSchema,
     _SpaceSchema,
+    _SpaceParamsSchema,
     _Client,
     _ResolvedUser,
     _ResolvedSpace,
@@ -153,6 +206,7 @@ export function definePlatform<
     _ConfigSchema,
     _UserSchema,
     _SpaceSchema,
+    _SpaceParamsSchema,
     _Client,
     _ResolvedUser,
     _ResolvedSpace,

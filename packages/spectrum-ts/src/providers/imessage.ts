@@ -126,10 +126,17 @@ export const imessage = definePlatform("iMessage", {
 
   space: {
     schema: z.object({
+      id: z.string(),
       type: z.enum(["dm", "group"]),
     }),
     resolve: async ({ input }) => {
-      if (input.options.type === "dm") {
+      if (input.users.length === 0) {
+        throw new Error("iMessage space creation requires at least one user");
+      }
+
+      const type = input.users.length === 1 ? "dm" : "group";
+
+      if (type === "dm") {
         return {
           id: directChat(input.users[0]?.id ?? "") as string,
           type: "dm",

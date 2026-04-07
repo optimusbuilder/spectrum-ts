@@ -16,10 +16,11 @@ type SchemaInfer<T> = T extends { schema?: infer S extends z.ZodType<object> }
   : Record<never, never>;
 type InferSchema<TSchema> =
   TSchema extends z.ZodType<object> ? z.infer<TSchema> : Record<never, never>;
+type InferOptionalSchema<TSchema> =
+  TSchema extends z.ZodType<object> ? z.infer<TSchema> : never;
 
-type SchemaInput<T> = T extends { schema?: infer S extends z.ZodType }
-  ? z.input<S>
-  : Record<string, never>;
+type InputSchema<TSchema> =
+  TSchema extends z.ZodType<object> ? z.input<TSchema> : never;
 
 // ---------------------------------------------------------------------------
 // Event system types
@@ -59,8 +60,9 @@ type ReservedNames = "stop" | "send" | "__internal" | "__providers";
 export interface PlatformDef<
   _Name extends string = string,
   _ConfigSchema extends z.ZodType<object> = z.ZodType<object>,
-  _UserSchema extends z.ZodType<object> = z.ZodType<object>,
-  _SpaceSchema extends z.ZodType<object> = z.ZodType<object>,
+  _UserSchema extends z.ZodType<object> | undefined = undefined,
+  _SpaceSchema extends z.ZodType<object> | undefined = undefined,
+  _SpaceParamsSchema extends z.ZodType<object> | undefined = undefined,
   _Client = unknown,
   _ResolvedUser extends ResolvedUser = ResolvedUser,
   _ResolvedSpace extends ResolvedSpace = ResolvedSpace,
@@ -105,10 +107,13 @@ export interface PlatformDef<
 
   space: {
     schema?: _SpaceSchema;
+    params?: _SpaceParamsSchema;
     resolve: (_: {
       input: {
         users: (_ResolvedUser & { __platform: _Name })[];
-        options: z.infer<_SpaceSchema>;
+        params?: _SpaceParamsSchema extends z.ZodType<object>
+          ? z.infer<_SpaceParamsSchema>
+          : undefined;
       };
       client: _Client;
       config: z.infer<_ConfigSchema>;
@@ -151,6 +156,7 @@ export interface AnyPlatformDef {
   name: string;
   space: {
     schema?: z.ZodType<object>;
+    params?: z.ZodType<object>;
     // biome-ignore lint/suspicious/noExplicitAny: wildcard resolver
     resolve: (_: any) => Promise<any>;
   };
@@ -271,13 +277,45 @@ export type CustomEventStreams<Providers extends PlatformProviderConfig[]> = {
 type ResolvedSpaceOf<Def extends AnyPlatformDef> = AwaitedReturn<
   Def["space"]["resolve"]
 >;
+type SchemaSpaceOf<Def extends AnyPlatformDef> = InferOptionalSchema<
+  Def["space"]["schema"]
+>;
 
 type ResolvedUserOf<Def extends AnyPlatformDef> = AwaitedReturn<
   Def["user"]["resolve"]
 >;
 
+type SpaceShapeOf<Def extends AnyPlatformDef> = [SchemaSpaceOf<Def>] extends [
+  never,
+]
+  ? ResolvedSpaceOf<Def>
+  : SchemaSpaceOf<Def>;
+
+type SpaceParamsInputOf<Def extends AnyPlatformDef> = InputSchema<
+  Def["space"]["params"]
+>;
+
+type SpaceArrayArgs<Def extends AnyPlatformDef> = [
+  SpaceParamsInputOf<Def>,
+] extends [never]
+  ? [users: PlatformUser<Def>[]]
+  :
+      | [users: PlatformUser<Def>[]]
+      | [users: PlatformUser<Def>[], params: SpaceParamsInputOf<Def>]
+      | [params: SpaceParamsInputOf<Def>];
+
+type SpaceVarargArgs<Def extends AnyPlatformDef> = [
+  SpaceParamsInputOf<Def>,
+] extends [never]
+  ? PlatformUser<Def>[]
+  : PlatformUser<Def>[] | [...PlatformUser<Def>[], SpaceParamsInputOf<Def>];
+
+type SpaceArgs<Def extends AnyPlatformDef> =
+  | SpaceArrayArgs<Def>
+  | SpaceVarargArgs<Def>;
+
 export type PlatformSpace<Def extends AnyPlatformDef> = Omit<
-  ResolvedSpaceOf<Def>,
+  SpaceShapeOf<Def>,
   keyof Space
 > &
   Space;
@@ -299,10 +337,7 @@ export type PlatformUser<Def extends AnyPlatformDef> = Omit<
 // ---------------------------------------------------------------------------
 
 export type PlatformInstance<Def extends AnyPlatformDef> = {
-  space(
-    users: PlatformUser<Def>[],
-    options: SchemaInput<Def["space"]>
-  ): Promise<PlatformSpace<Def>>;
+  space(...args: SpaceArgs<Def>): Promise<PlatformSpace<Def>>;
   user(userID: string): Promise<PlatformUser<Def>>;
 } & {
   [K in Exclude<
