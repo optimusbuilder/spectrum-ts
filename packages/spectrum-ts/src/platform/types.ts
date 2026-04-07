@@ -43,6 +43,23 @@ export type ProviderMessage<
   timestamp?: Date;
 } & TExtra;
 
+type MergeSchema<
+  TSchema extends z.ZodType | undefined,
+  TBase extends object,
+> = TSchema extends z.ZodType
+  ? string extends keyof z.infer<TSchema>
+    ? TBase
+    : Omit<z.infer<TSchema>, keyof TBase> & TBase
+  : TBase;
+
+export type SchemaMessage<
+  TUserSchema extends z.ZodType | undefined = undefined,
+  TSpaceSchema extends z.ZodType | undefined = undefined,
+> = ProviderMessage<
+  MergeSchema<TUserSchema, ResolvedUser>,
+  MergeSchema<TSpaceSchema, ResolvedSpace>
+>;
+
 type InferEventPayload<T> = T extends (ctx: never) => AsyncIterable<infer P>
   ? P
   : never;

@@ -10,6 +10,7 @@ export type {
   PlatformProviderConfig,
   PlatformSpace,
   PlatformUser,
+  SchemaMessage,
 } from "./platform/types";
 export { Spectrum, type SpectrumInstance } from "./spectrum";
 export { type Content, text } from "./types/content";
