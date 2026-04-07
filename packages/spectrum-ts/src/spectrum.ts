@@ -20,7 +20,6 @@ export type SpectrumInstance<
 > = SpectrumLike<Providers> &
   CustomEventStreams<Providers> & {
     readonly messages: AsyncIterable<[RichSpace, UnifiedMessage<Providers>]>;
-    start(): Promise<void>;
     stop(): Promise<void>;
     send(space: RichSpace, ...content: [Content, ...Content[]]): Promise<void>;
   };
@@ -39,11 +38,13 @@ const spectrumConfigSchema = z.object({
 // Spectrum() factory
 // ---------------------------------------------------------------------------
 
-export function Spectrum<const Providers extends PlatformProviderConfig[]>(
+export async function Spectrum<
+  const Providers extends PlatformProviderConfig[],
+>(
   projectId: string,
   projectSecret: string,
   options: { providers: [...Providers] }
-): SpectrumInstance<Providers> {
+): Promise<SpectrumInstance<Providers>> {
   spectrumConfigSchema.parse({
     projectId,
     projectSecret,
@@ -60,31 +61,24 @@ export function Spectrum<const Providers extends PlatformProviderConfig[]>(
   // Custom event streams keyed by event name
   const customEventStreams = new Map<string, ManagedStream<unknown>>();
 
-  let initialized = false;
   let stopped = false;
 
-  const initializeOnce = async () => {
-    if (initialized) {
-      return;
-    }
-    initialized = true;
+  // Initialize all provider clients eagerly
+  for (const provider of options.providers) {
+    const providerConfig = provider as PlatformProviderConfig;
+    const def = providerConfig.__definition;
+    const userConfig = def.config.parse(providerConfig.config);
 
-    for (const provider of options.providers) {
-      const providerConfig = provider as PlatformProviderConfig;
-      const def = providerConfig.__definition;
-      const userConfig = def.config.parse(providerConfig.config);
+    const client = await def.lifecycle.createClient({
+      config: userConfig,
+    });
 
-      const client = await def.lifecycle.createClient({
-        config: userConfig,
-      });
-
-      platformStates.set(def.name, {
-        client,
-        config: userConfig,
-        definition: def,
-      });
-    }
-  };
+    platformStates.set(def.name, {
+      client,
+      config: userConfig,
+      definition: def,
+    });
+  }
 
   const adaptIterable = <T>(iterable: AsyncIterable<T>): ManagedStream<T> => {
     return stream<T>((emit, end) => {
@@ -146,7 +140,6 @@ export function Spectrum<const Providers extends PlatformProviderConfig[]>(
 
   const createMessagesStream = (): ManagedStream<[RichSpace, Message]> => {
     return stream<[RichSpace, Message]>(async (emit, end) => {
-      await initializeOnce();
       const merged = mergeStreams(
         Array.from(platformStates.values(), createProviderMessagesStream)
       );
@@ -172,7 +165,6 @@ export function Spectrum<const Providers extends PlatformProviderConfig[]>(
     eventName: string
   ): ManagedStream<unknown> => {
     return stream<unknown>(async (emit, end) => {
-      await initializeOnce();
       const providerStreams = Array.from(platformStates.values(), (state) => {
         const { client, config, definition } = state;
         const producer = definition.events[eventName] as
@@ -268,7 +260,6 @@ export function Spectrum<const Providers extends PlatformProviderConfig[]>(
     __providers: options.providers,
     __internal: { platforms: platformStates },
     messages,
-    start: initializeOnce,
     stop: stopOnce,
     send: async (space: RichSpace, ...content: [Content, ...Content[]]) => {
       await space.send(...content);

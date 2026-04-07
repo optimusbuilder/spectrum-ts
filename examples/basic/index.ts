@@ -1,7 +1,7 @@
 import { Spectrum, text } from "spectrum-ts";
 import { imessage } from "spectrum-ts/providers/imessage";
 
-const app = Spectrum("example", "secret", {
+const app = await Spectrum("example", "secret", {
   providers: [
     imessage.config({
       clients: {
@@ -21,10 +21,8 @@ const app = Spectrum("example", "secret", {
 //   await space.send(text(`echo: ${incoming}`));
 // }
 
-await app.start();
 const im = imessage(app);
 const user = await im.user("+13322593374");
 const space = await im.space([user], { type: "dm" });
 await app.send(space, text("hello"));
 console.log("sent");
-await app.stop();
