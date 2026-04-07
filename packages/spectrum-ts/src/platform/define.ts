@@ -89,6 +89,8 @@ export function definePlatform<
   _UserSchema extends z.ZodType<object>,
   _SpaceSchema extends z.ZodType<object>,
   _Client,
+  _ResolvedUser extends { id: string },
+  _ResolvedSpace extends { id: string },
   _MessageType,
   _Events extends {
     messages: (ctx: {
@@ -105,6 +107,8 @@ export function definePlatform<
       _UserSchema,
       _SpaceSchema,
       _Client,
+      _ResolvedUser,
+      _ResolvedSpace,
       _MessageType,
       _Events
     >,
@@ -117,6 +121,8 @@ export function definePlatform<
     _UserSchema,
     _SpaceSchema,
     _Client,
+    _ResolvedUser,
+    _ResolvedSpace,
     _MessageType,
     _Events
   >
@@ -127,6 +133,8 @@ export function definePlatform<
     _UserSchema,
     _SpaceSchema,
     _Client,
+    _ResolvedUser,
+    _ResolvedSpace,
     _MessageType,
     _Events
   >;

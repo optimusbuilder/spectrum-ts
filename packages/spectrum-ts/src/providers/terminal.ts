@@ -5,6 +5,18 @@ import { definePlatform } from "../platform/define";
 export const terminal = definePlatform("terminal", {
   config: z.object({}),
 
+  user: {
+    resolve: async ({ input }) => ({
+      id: input.userID,
+    }),
+  },
+
+  space: {
+    resolve: async () => ({
+      id: "terminal",
+    }),
+  },
+
   lifecycle: {
     createClient: async () => {
       const client = createInterface({
@@ -50,17 +62,5 @@ export const terminal = definePlatform("terminal", {
 
       console.log(output);
     },
-  },
-
-  user: {
-    resolve: async ({ input }) => ({
-      id: input.userID,
-    }),
-  },
-
-  space: {
-    resolve: async () => ({
-      id: "terminal",
-    }),
   },
 });

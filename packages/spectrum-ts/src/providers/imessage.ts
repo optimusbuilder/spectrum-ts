@@ -129,6 +129,25 @@ export const imessage = definePlatform("iMessage", {
     }),
   ]),
 
+  user: {
+    resolve: async ({ input }) => ({
+      id: input.userID,
+    }),
+  },
+
+  space: {
+    schema: z.object({
+      type: z.enum(["dm", "group"]),
+    }),
+    resolve: async ({ input }) => {
+      const id =
+        input.options.type === "dm"
+          ? directChat(input.users[0]?.id ?? "")
+          : groupChat("");
+      return { id: id as string };
+    },
+  },
+
   lifecycle: {
     createClient: async ({ config }): Promise<IMessageClient> => {
       if (config.local) {
@@ -146,7 +165,7 @@ export const imessage = definePlatform("iMessage", {
       );
     },
 
-    destroyClient: async ({ client }) => {
+    destroyClient: async ({ client }: { client: IMessageClient }) => {
       if (client instanceof IMessageSDK) {
         await client.close();
         return;
@@ -185,25 +204,6 @@ export const imessage = definePlatform("iMessage", {
       if (remote) {
         await remote.messages.send(chatGuid(space.id), text);
       }
-    },
-  },
-
-  user: {
-    resolve: async ({ input }) => ({
-      id: input.userID,
-    }),
-  },
-
-  space: {
-    schema: z.object({
-      type: z.enum(["dm", "group"]),
-    }),
-    resolve: async ({ input }) => {
-      const id =
-        input.options.type === "dm"
-          ? directChat(input.users[0]?.id ?? "")
-          : groupChat("");
-      return { id: id as string };
     },
   },
 });

@@ -8,22 +8,9 @@ import type { User } from "../types/user";
 type ResolvedSpace = Pick<Space, "id">;
 type SpaceRef = Pick<Space, "id" | "__platform">;
 type ResolvedUser = Pick<User, "id">;
-
-// ---------------------------------------------------------------------------
-// Type-level helpers
-// ---------------------------------------------------------------------------
-
-type KnownKeys<T> = {
-  [K in keyof T as string extends K
-    ? never
-    : number extends K
-      ? never
-      : K]: T[K];
-};
-
-type SchemaInfer<T> = T extends { schema?: infer S extends z.ZodType }
-  ? z.infer<S>
-  : Record<string, never>;
+type AwaitedReturn<T> = T extends (...args: never[]) => Promise<infer R>
+  ? R
+  : never;
 
 type SchemaInput<T> = T extends { schema?: infer S extends z.ZodType }
   ? z.input<S>
@@ -59,6 +46,8 @@ export interface PlatformDef<
   _UserSchema extends z.ZodType<object> = z.ZodType<object>,
   _SpaceSchema extends z.ZodType<object> = z.ZodType<object>,
   _Client = unknown,
+  _ResolvedUser extends ResolvedUser = ResolvedUser,
+  _ResolvedSpace extends ResolvedSpace = ResolvedSpace,
   _MessageType = unknown,
   _Events extends {
     messages: EventProducer<_MessageType, _Client, z.infer<_ConfigSchema>>;
@@ -68,7 +57,7 @@ export interface PlatformDef<
 > {
   actions: {
     send: (_: {
-      space: SpaceRef;
+      space: _ResolvedSpace & SpaceRef;
       content: Content[];
       client: _Client;
       config: z.infer<_ConfigSchema>;
@@ -93,12 +82,12 @@ export interface PlatformDef<
     schema?: _SpaceSchema;
     resolve: (_: {
       input: {
-        users: (User & KnownKeys<z.infer<_UserSchema>>)[];
+        users: (_ResolvedUser & { __platform: _Name })[];
         options: z.infer<_SpaceSchema>;
       };
       client: _Client;
       config: z.infer<_ConfigSchema>;
-    }) => Promise<ResolvedSpace>;
+    }) => Promise<_ResolvedSpace>;
   };
 
   user: {
@@ -107,7 +96,7 @@ export interface PlatformDef<
       input: { userID: string };
       client: _Client;
       config: z.infer<_ConfigSchema>;
-    }) => Promise<ResolvedUser & KnownKeys<z.infer<_UserSchema>>>;
+    }) => Promise<_ResolvedUser>;
   };
 }
 
@@ -254,13 +243,31 @@ export type CustomEventStreams<Providers extends PlatformProviderConfig[]> = {
 // Platform-specific Space, Message, and User types
 // ---------------------------------------------------------------------------
 
-export type PlatformSpace<_Def extends AnyPlatformDef> = Space<_Def> &
-  KnownKeys<SchemaInfer<_Def["space"]>>;
+type ResolvedSpaceOf<Def extends AnyPlatformDef> = AwaitedReturn<
+  Def["space"]["resolve"]
+>;
 
-export type PlatformMessage<_Def extends AnyPlatformDef> = Message<_Def>;
+type ResolvedUserOf<Def extends AnyPlatformDef> = AwaitedReturn<
+  Def["user"]["resolve"]
+>;
 
-export type PlatformUser<Def extends AnyPlatformDef> = User &
-  KnownKeys<SchemaInfer<Def["user"]>>;
+export type PlatformSpace<Def extends AnyPlatformDef> = Omit<
+  ResolvedSpaceOf<Def>,
+  keyof Space
+> &
+  Space;
+
+export type PlatformMessage<Def extends AnyPlatformDef> = Omit<
+  InferEventPayload<Def["events"]["messages"]>,
+  keyof Message
+> &
+  Message<Def["name"], PlatformUser<Def>, PlatformSpace<Def>>;
+
+export type PlatformUser<Def extends AnyPlatformDef> = Omit<
+  ResolvedUserOf<Def>,
+  keyof User
+> &
+  User;
 
 // ---------------------------------------------------------------------------
 // PlatformInstance — returned from imessage(spectrum)
