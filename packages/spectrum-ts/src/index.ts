@@ -13,7 +13,7 @@ export type {
   SchemaMessage,
 } from "./platform/types";
 export { Spectrum, type SpectrumInstance } from "./spectrum";
-export { type Content, text } from "./types/content";
+export { type Content, custom, text } from "./types/content";
 export type { Message } from "./types/message";
 export type { Space } from "./types/space";
 export type { User } from "./types/user";
