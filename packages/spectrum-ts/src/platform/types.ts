@@ -106,6 +106,16 @@ export interface PlatformDef<
       client: _Client;
       config: z.infer<_ConfigSchema>;
     }) => Promise<void>;
+    startTyping?: (_: {
+      space: _ResolvedSpace & SpaceRef;
+      client: _Client;
+      config: z.infer<_ConfigSchema>;
+    }) => Promise<void>;
+    stopTyping?: (_: {
+      space: _ResolvedSpace & SpaceRef;
+      client: _Client;
+      config: z.infer<_ConfigSchema>;
+    }) => Promise<void>;
   };
 
   config: _ConfigSchema;
@@ -155,6 +165,10 @@ export interface AnyPlatformDef {
   actions: {
     // biome-ignore lint/suspicious/noExplicitAny: wildcard action
     send: (_: any) => Promise<void>;
+    // biome-ignore lint/suspicious/noExplicitAny: wildcard action
+    startTyping?: (_: any) => Promise<void>;
+    // biome-ignore lint/suspicious/noExplicitAny: wildcard action
+    stopTyping?: (_: any) => Promise<void>;
   };
   config: z.ZodType<object>;
   events: {

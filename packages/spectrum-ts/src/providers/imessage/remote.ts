@@ -42,6 +42,28 @@ export const messages = (
   clients: AdvancedIMessage[]
 ): ManagedStream<IMessageMessage> => mergeStreams(clients.map(clientStream));
 
+export const startTyping = async (
+  clients: AdvancedIMessage[],
+  spaceId: string
+) => {
+  const remote = clients[0];
+  if (!remote) {
+    return;
+  }
+  await remote.chats.startTyping(chatGuid(spaceId));
+};
+
+export const stopTyping = async (
+  clients: AdvancedIMessage[],
+  spaceId: string
+) => {
+  const remote = clients[0];
+  if (!remote) {
+    return;
+  }
+  await remote.chats.stopTyping(chatGuid(spaceId));
+};
+
 export const send = async (
   clients: AdvancedIMessage[],
   spaceId: string,

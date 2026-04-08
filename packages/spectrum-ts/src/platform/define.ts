@@ -99,17 +99,34 @@ function createPlatformInstance<
         id: parsedSpace.id,
         __platform: def.name,
       };
+      const typingCtx = {
+        space: spaceRef,
+        client: runtime.client as _Client,
+        config: runtime.config as z.infer<_ConfigSchema>,
+      };
       return {
         ...parsedSpace,
         ...spaceRef,
         send: async (...content: [ContentBuilder, ...ContentBuilder[]]) => {
           const built = await Promise.all(content.map((c) => c.build()));
           await def.actions.send({
-            space: spaceRef,
+            ...typingCtx,
             content: built,
-            client: runtime.client as _Client,
-            config: runtime.config as z.infer<_ConfigSchema>,
           });
+        },
+        startTyping: async () => {
+          await def.actions.startTyping?.(typingCtx);
+        },
+        stopTyping: async () => {
+          await def.actions.stopTyping?.(typingCtx);
+        },
+        responding: async <T>(fn: () => T | Promise<T>): Promise<T> => {
+          await def.actions.startTyping?.(typingCtx);
+          try {
+            return await fn();
+          } finally {
+            await def.actions.stopTyping?.(typingCtx).catch(() => {});
+          }
         },
       } as PlatformSpace<Def>;
     },

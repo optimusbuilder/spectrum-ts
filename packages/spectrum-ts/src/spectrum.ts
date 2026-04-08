@@ -38,6 +38,7 @@ export type SpectrumInstance<
       space: Space,
       ...content: [ContentBuilder, ...ContentBuilder[]]
     ): Promise<void>;
+    responding<T>(space: Space, fn: () => T | Promise<T>): Promise<T>;
   };
 
 // ---------------------------------------------------------------------------
@@ -141,16 +142,29 @@ export async function Spectrum<
           ...msg.space,
           __platform: definition.name,
         };
+        const typingCtx = { space: spaceRef, client, config };
         const space = {
           ...spaceRef,
           send: async (...content: [ContentBuilder, ...ContentBuilder[]]) => {
             const resolved = await Promise.all(content.map((c) => c.build()));
             await definition.actions.send({
-              space: spaceRef,
+              ...typingCtx,
               content: resolved,
-              client,
-              config,
             });
+          },
+          startTyping: async () => {
+            await definition.actions.startTyping?.(typingCtx);
+          },
+          stopTyping: async () => {
+            await definition.actions.stopTyping?.(typingCtx);
+          },
+          responding: async <T>(fn: () => T | Promise<T>): Promise<T> => {
+            await definition.actions.startTyping?.(typingCtx);
+            try {
+              return await fn();
+            } finally {
+              await definition.actions.stopTyping?.(typingCtx).catch(() => {});
+            }
           },
         };
         const normalizedMessage = {
@@ -307,6 +321,12 @@ export async function Spectrum<
       ...content: [ContentBuilder, ...ContentBuilder[]]
     ) => {
       await space.send(...content);
+    },
+    responding: async <T>(
+      space: Space,
+      fn: () => T | Promise<T>
+    ): Promise<T> => {
+      return space.responding(fn);
     },
   };
 

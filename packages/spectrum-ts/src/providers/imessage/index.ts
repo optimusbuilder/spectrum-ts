@@ -2,7 +2,12 @@ import { createClient, directChat } from "@photon-ai/advanced-imessage";
 import { IMessageSDK } from "@photon-ai/imessage-kit";
 import { definePlatform } from "../../platform/define";
 import { messages as localMessages, send as localSend } from "./local";
-import { messages as remoteMessages, send as remoteSend } from "./remote";
+import {
+  messages as remoteMessages,
+  send as remoteSend,
+  startTyping as remoteStartTyping,
+  stopTyping as remoteStopTyping,
+} from "./remote";
 import {
   configSchema,
   type IMessageClient,
@@ -85,6 +90,18 @@ export const imessage = definePlatform("iMessage", {
           await remoteSend(client, space.id, item);
         }
       }
+    },
+    startTyping: async ({ space, client }) => {
+      if (isLocal(client)) {
+        return;
+      }
+      await remoteStartTyping(client, space.id);
+    },
+    stopTyping: async ({ space, client }) => {
+      if (isLocal(client)) {
+        return;
+      }
+      await remoteStopTyping(client, space.id);
     },
   },
 });
