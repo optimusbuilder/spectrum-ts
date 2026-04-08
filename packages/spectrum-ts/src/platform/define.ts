@@ -186,6 +186,7 @@ export function definePlatform<
       config: z.infer<_ConfigSchema>;
     }) => AsyncIterable<_MessageType>;
   },
+  _Static extends Record<string, unknown> = Record<never, never>,
 >(
   name: _Name,
   def: Omit<
@@ -203,7 +204,7 @@ export function definePlatform<
       _Events
     >,
     "name"
-  >
+  > & { static?: _Static }
 ): Platform<
   PlatformDef<
     _Name,
@@ -218,7 +219,8 @@ export function definePlatform<
     _MessageType,
     _Events
   >
-> {
+> &
+  Readonly<_Static> {
   type Def = PlatformDef<
     _Name,
     _ConfigSchema,
@@ -297,5 +299,9 @@ export function definePlatform<
     } satisfies PlatformProviderConfig<Def> as PlatformProviderConfig<Def>;
   };
 
-  return narrower;
+  if (def.static) {
+    Object.assign(narrower, def.static);
+  }
+
+  return narrower as Platform<Def> & Readonly<_Static>;
 }

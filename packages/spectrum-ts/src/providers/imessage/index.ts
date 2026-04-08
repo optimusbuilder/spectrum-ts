@@ -4,6 +4,7 @@ import { definePlatform } from "../../platform/define";
 import { messages as localMessages, send as localSend } from "./local";
 import {
   messages as remoteMessages,
+  reactToMessage as remoteReactToMessage,
   send as remoteSend,
   startTyping as remoteStartTyping,
   stopTyping as remoteStopTyping,
@@ -17,6 +18,17 @@ import {
 
 export const imessage = definePlatform("iMessage", {
   config: configSchema,
+
+  static: {
+    tapbacks: {
+      love: "love",
+      like: "like",
+      dislike: "dislike",
+      laugh: "laugh",
+      emphasize: "emphasize",
+      question: "question",
+    } as const,
+  },
 
   user: {
     resolve: async ({ input }) => ({ id: input.userID }),
@@ -102,6 +114,12 @@ export const imessage = definePlatform("iMessage", {
         return;
       }
       await remoteStopTyping(client, space.id);
+    },
+    reactToMessage: async ({ space, messageId, reaction, client }) => {
+      if (isLocal(client)) {
+        return;
+      }
+      await remoteReactToMessage(client, space.id, messageId, reaction);
     },
   },
 });

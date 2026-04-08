@@ -2,6 +2,8 @@ import {
   type AdvancedIMessage,
   chatGuid,
   type MessageEvent,
+  messageGuid,
+  Reaction,
 } from "@photon-ai/advanced-imessage";
 import type { Content } from "../../types/content";
 import { type ManagedStream, mergeStreams, stream } from "../../utils/stream";
@@ -9,7 +11,12 @@ import type { IMessageMessage } from "./types";
 
 type ReceivedEvent = Extract<MessageEvent, { type: "message.received" }>;
 
+const TAPBACK_NAMES: ReadonlySet<string> = new Set(
+  Object.values(Reaction).filter((r) => r !== "emoji" && r !== "sticker")
+);
+
 const toMessage = (event: ReceivedEvent): IMessageMessage => ({
+  id: event.message.guid as string,
   content: [{ type: "plain_text", text: event.message.text ?? "" }],
   sender: { id: event.message.sender?.address ?? "" },
   space: {
@@ -90,5 +97,26 @@ export const send = async (
     }
     default:
       break;
+  }
+};
+
+export const reactToMessage = async (
+  clients: AdvancedIMessage[],
+  spaceId: string,
+  msgId: string,
+  reaction: string
+) => {
+  const remote = clients[0];
+  if (!remote) {
+    return;
+  }
+
+  const chat = chatGuid(spaceId);
+  const msg = messageGuid(msgId);
+
+  if (TAPBACK_NAMES.has(reaction)) {
+    await remote.messages.react(chat, msg, reaction as Reaction);
+  } else {
+    await remote.messages.reactEmoji(chat, msg, reaction);
   }
 };

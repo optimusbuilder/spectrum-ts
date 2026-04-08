@@ -11,6 +11,7 @@ import type { Space } from "./types/space";
 import { type ManagedStream, mergeStreams, stream } from "./utils/stream";
 
 type ProviderMessageRecord = {
+  id: string;
   content: Content[];
   sender: { id: string } & Record<string, unknown>;
   space: { id: string } & Record<string, unknown>;
@@ -19,6 +20,7 @@ type ProviderMessageRecord = {
 
 const providerMessageCoreKeys = new Set([
   "content",
+  "id",
   "sender",
   "space",
   "timestamp",
@@ -169,8 +171,21 @@ export async function Spectrum<
         };
         const normalizedMessage = {
           ...parsedExtra,
+          id: msg.id,
           content: msg.content,
           platform: definition.name,
+          react: async (reaction: string): Promise<void> => {
+            if (!definition.actions.reactToMessage) {
+              return;
+            }
+            await definition.actions.reactToMessage({
+              space: spaceRef,
+              messageId: msg.id,
+              reaction,
+              client,
+              config,
+            });
+          },
           sender: {
             ...msg.sender,
             __platform: definition.name,

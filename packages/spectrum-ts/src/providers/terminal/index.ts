@@ -42,6 +42,7 @@ export const terminal = definePlatform("terminal", {
     async *messages({ client }) {
       for await (const line of client) {
         yield {
+          id: crypto.randomUUID(),
           content: [{ type: "plain_text" as const, text: line }],
           sender: { id: "terminal-user" },
           space: { id: "terminal" },

@@ -1,4 +1,4 @@
-import { attachment, Spectrum, text } from "spectrum-ts";
+import { Spectrum, text } from "spectrum-ts";
 import { imessage } from "spectrum-ts/providers/imessage";
 
 // import { terminal } from "spectrum-ts/providers/terminal";
@@ -23,10 +23,11 @@ for await (const [space, message] of app.messages) {
     .join(" ");
 
   console.log(imessage(space));
-  
 
   await space.responding(async () => {
     await new Promise((resolve) => setTimeout(resolve, 1000));
+
+    await message.react(imessage.tapbacks.laugh)
 
     await space.send(text(`echo: ${incoming}`));
   });

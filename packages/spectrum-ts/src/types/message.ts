@@ -8,7 +8,9 @@ export interface Message<
   TSpace extends Space = Space,
 > {
   content: Content[];
+  readonly id: string;
   platform: TPlatform;
+  react(reaction: string): Promise<void>;
   sender: TSender;
   space: TSpace;
   timestamp: Date;

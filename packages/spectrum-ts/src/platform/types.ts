@@ -37,6 +37,7 @@ export type ProviderMessage<
   TSpace extends ResolvedSpace = ResolvedSpace,
   TExtra extends object = Record<never, never>,
 > = {
+  id: string;
   content: Content[];
   sender: TSender;
   space: TSpace;
@@ -116,6 +117,13 @@ export interface PlatformDef<
       client: _Client;
       config: z.infer<_ConfigSchema>;
     }) => Promise<void>;
+    reactToMessage?: (_: {
+      space: _ResolvedSpace & SpaceRef;
+      messageId: string;
+      reaction: string;
+      client: _Client;
+      config: z.infer<_ConfigSchema>;
+    }) => Promise<void>;
   };
 
   config: _ConfigSchema;
@@ -169,6 +177,8 @@ export interface AnyPlatformDef {
     startTyping?: (_: any) => Promise<void>;
     // biome-ignore lint/suspicious/noExplicitAny: wildcard action
     stopTyping?: (_: any) => Promise<void>;
+    // biome-ignore lint/suspicious/noExplicitAny: wildcard action
+    reactToMessage?: (_: any) => Promise<void>;
   };
   config: z.ZodType<object>;
   events: {

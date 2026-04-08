@@ -15,6 +15,7 @@ const toSpace = (message: LocalIMessage): IMessageMessage["space"] => ({
 });
 
 const toMessage = (message: LocalIMessage): IMessageMessage => ({
+  id: message.guid,
   content: [{ type: "plain_text", text: message.text ?? "" }],
   sender: { id: message.sender ?? "" },
   space: toSpace(message),
