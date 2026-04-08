@@ -28,4 +28,4 @@ const app = await Spectrum("example", "secret", {
 const user1 = await imessage(app).user("+13322593374");
 const user2 = await imessage(app).user("+15103658086");
 const newSpace = await imessage(app).space(user1, user2);
-await newSpace.send(text("hello"));
+await newSpace.send(text("hello"), text("hello"));

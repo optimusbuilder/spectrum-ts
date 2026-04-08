@@ -53,12 +53,13 @@ export const terminal = definePlatform("terminal", {
 
   actions: {
     send: async ({ content }) => {
-      const output = content
+      const outputs = content
         .filter((c) => c.type === "plain_text")
-        .map((c) => c.text)
-        .join("\n");
+        .map((c) => c.text);
 
-      console.log(output);
+      for (const output of outputs) {
+        console.log(output);
+      }
     },
   },
 });

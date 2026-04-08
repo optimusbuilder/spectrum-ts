@@ -4,8 +4,8 @@ import { definePlatform } from "../../platform/define";
 import { messages as localMessages, send as localSend } from "./local";
 import { messages as remoteMessages, send as remoteSend } from "./remote";
 import {
-  type IMessageClient,
   configSchema,
+  type IMessageClient,
   isLocal,
   spaceSchema,
 } from "./types";
@@ -78,15 +78,19 @@ export const imessage = definePlatform("iMessage", {
 
   actions: {
     send: async ({ space, content, client }) => {
-      const text = content
+      const texts = content
         .filter((c) => c.type === "plain_text")
-        .map((c) => c.text)
-        .join("\n");
+        .map((c) => c.text);
 
       if (isLocal(client)) {
-        return localSend(client, space.id, text);
+        for (const text of texts) {
+          await localSend(client, space.id, text);
+        }
+        return;
       }
-      return remoteSend(client, space.id, text);
+      for (const text of texts) {
+        await remoteSend(client, space.id, text);
+      }
     },
   },
 });
