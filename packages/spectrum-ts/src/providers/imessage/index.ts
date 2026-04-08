@@ -78,18 +78,12 @@ export const imessage = definePlatform("iMessage", {
 
   actions: {
     send: async ({ space, content, client }) => {
-      const texts = content
-        .filter((c) => c.type === "plain_text")
-        .map((c) => c.text);
-
-      if (isLocal(client)) {
-        for (const text of texts) {
-          await localSend(client, space.id, text);
+      for (const item of content) {
+        if (isLocal(client)) {
+          await localSend(client, space.id, item);
+        } else {
+          await remoteSend(client, space.id, item);
         }
-        return;
-      }
-      for (const text of texts) {
-        await remoteSend(client, space.id, text);
       }
     },
   },

@@ -3,6 +3,7 @@ import {
   chatGuid,
   type MessageEvent,
 } from "@photon-ai/advanced-imessage";
+import type { Content } from "../../types/content";
 import { type ManagedStream, mergeStreams, stream } from "../../utils/stream";
 import type { IMessageMessage } from "./types";
 
@@ -44,10 +45,28 @@ export const messages = (
 export const send = async (
   clients: AdvancedIMessage[],
   spaceId: string,
-  text: string
+  content: Content
 ) => {
   const remote = clients[0];
-  if (remote) {
-    await remote.messages.send(chatGuid(spaceId), text);
+  if (!remote) {
+    return;
+  }
+  switch (content.type) {
+    case "plain_text":
+      await remote.messages.send(chatGuid(spaceId), content.text);
+      break;
+    case "image": {
+      const attachment = await remote.attachments.upload({
+        data: content.data,
+        fileName: "image.jpg",
+        mimeType: "image/jpeg",
+      });
+      await remote.messages.send(chatGuid(spaceId), "", {
+        attachment: attachment.guid,
+      });
+      break;
+    }
+    default:
+      break;
   }
 };

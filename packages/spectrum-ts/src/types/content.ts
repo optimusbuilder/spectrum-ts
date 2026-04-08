@@ -1,4 +1,5 @@
 import { readFile } from "node:fs/promises";
+import { heifToJpeg } from "@photon-hq/heif2jpeg";
 import type { NonEmptyString } from "type-fest";
 import z from "zod";
 
@@ -65,7 +66,6 @@ export function image(
     build: async (): Promise<Content> => {
       let data = typeof input === "string" ? await readFile(input) : input;
       if (isHeif(data)) {
-        const { heifToJpeg } = await import("@photon-hq/heif2jpeg");
         data = (await heifToJpeg(data, {
           quality: options?.quality ?? 85,
         })) as Buffer;

@@ -30,5 +30,7 @@ const app = await Spectrum("example", "secret", {
 const user1 = await imessage(app).user("+13322593374");
 // const user2 = await imessage(app).user("+15103658086");
 const newSpace = await imessage(app).space(user1);
-await newSpace.send(text("hello"), image("/Users/ryanzhu/Downloads/Image.jpeg"));
-
+await newSpace.send(
+  text("hello"),
+  image("/Users/ryanzhu/Downloads/Image.jpeg")
+);

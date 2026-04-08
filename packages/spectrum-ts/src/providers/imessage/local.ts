@@ -1,7 +1,11 @@
+import { unlink, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import type {
   IMessageSDK,
   Message as LocalIMessage,
 } from "@photon-ai/imessage-kit";
+import type { Content } from "../../types/content";
 import { type ManagedStream, stream } from "../../utils/stream";
 import type { IMessageMessage } from "./types";
 
@@ -28,7 +32,23 @@ export const messages = (client: IMessageSDK): ManagedStream<IMessageMessage> =>
 export const send = async (
   client: IMessageSDK,
   spaceId: string,
-  text: string
+  content: Content
 ) => {
-  await client.send(spaceId, text);
+  switch (content.type) {
+    case "plain_text":
+      await client.send(spaceId, content.text);
+      break;
+    case "image": {
+      const tmp = join(tmpdir(), `spectrum-${Date.now()}.jpg`);
+      await writeFile(tmp, content.data);
+      try {
+        await client.send(spaceId, { images: [tmp] });
+      } finally {
+        await unlink(tmp).catch(() => {});
+      }
+      break;
+    }
+    default:
+      break;
+  }
 };
