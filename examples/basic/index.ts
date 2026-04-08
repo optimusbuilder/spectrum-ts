@@ -1,6 +1,6 @@
 import { Spectrum, text } from "spectrum-ts";
 import { imessage } from "spectrum-ts/providers/imessage";
-import { terminal } from "spectrum-ts/providers/terminal";
+// import { terminal } from "spectrum-ts/providers/terminal";
 
 const app = await Spectrum("example", "secret", {
   providers: [
@@ -10,20 +10,22 @@ const app = await Spectrum("example", "secret", {
         token: "",
       },
     }),
-    terminal.config({}),
+    // terminal.config({}),
   ],
 });
 
-for await (const [space, message] of app.messages) {
-  const incoming = message.content
-    .filter((c) => c.type === "plain_text")
-    .map((c) => c.text)
-    .join(" ");
+// for await (const [space, message] of app.messages) {
+//   const incoming = message.content
+//     .filter((c) => c.type === "plain_text")
+//     .map((c) => c.text)
+//     .join(" ");
 
-  console.log(imessage(space).type);
+//   console.log(imessage(space).type);
 
-  await space.send(text(`echo: ${incoming}`));
-}
+//   await space.send(text(`echo: ${incoming}`));
+// }
 
-// const newUser = await imessage(app).user("xxx");
-// await imessage(app).space(newUser);
+const user1 = await imessage(app).user("+13322593374");
+const user2 = await imessage(app).user("+15103658086");
+const newSpace = await imessage(app).space(user1, user2);
+await newSpace.send(text("hello"));

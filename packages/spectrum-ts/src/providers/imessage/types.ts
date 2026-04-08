@@ -1,9 +1,12 @@
 import type { AdvancedIMessage } from "@photon-ai/advanced-imessage";
-import type { IMessageSDK } from "@photon-ai/imessage-kit";
+import { IMessageSDK } from "@photon-ai/imessage-kit";
 import z from "zod";
 import type { SchemaMessage } from "../../platform/types";
 
 export type IMessageClient = IMessageSDK | AdvancedIMessage[];
+
+export const isLocal = (client: IMessageClient): client is IMessageSDK =>
+  client instanceof IMessageSDK;
 
 const clientEntry = z.object({ address: z.string(), token: z.string() });
 

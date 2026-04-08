@@ -1,16 +1,14 @@
-import {
-  createClient,
-  directChat,
-  groupChat,
-} from "@photon-ai/advanced-imessage";
+import { createClient, directChat } from "@photon-ai/advanced-imessage";
 import { IMessageSDK } from "@photon-ai/imessage-kit";
 import { definePlatform } from "../../platform/define";
 import { messages as localMessages, send as localSend } from "./local";
 import { messages as remoteMessages, send as remoteSend } from "./remote";
-import { configSchema, type IMessageClient, spaceSchema } from "./types";
-
-const isLocal = (client: IMessageClient): client is IMessageSDK =>
-  client instanceof IMessageSDK;
+import {
+  type IMessageClient,
+  configSchema,
+  isLocal,
+  spaceSchema,
+} from "./types";
 
 export const imessage = definePlatform("iMessage", {
   config: configSchema,
@@ -21,19 +19,33 @@ export const imessage = definePlatform("iMessage", {
 
   space: {
     schema: spaceSchema,
-    resolve: async ({ input }) => {
+    resolve: async ({ input, client }) => {
+      if (isLocal(client)) {
+        throw new Error(
+          "Space creation is not supported in local mode. Local mode only supports replying to messages."
+        );
+      }
+
       if (input.users.length === 0) {
         throw new Error("iMessage space creation requires at least one user");
       }
 
-      const type = input.users.length === 1 ? "dm" : "group";
+      const addresses = input.users.map((u) => u.id);
 
-      return type === "dm"
-        ? {
-            id: directChat(input.users[0]?.id ?? "") as string,
-            type: "dm" as const,
-          }
-        : { id: groupChat("") as string, type: "group" as const };
+      if (input.users.length === 1) {
+        return {
+          id: directChat(addresses[0] ?? "") as string,
+          type: "dm" as const,
+        };
+      }
+
+      const remote = client[0];
+      if (!remote) {
+        throw new Error("No remote iMessage client available");
+      }
+
+      const { chat } = await remote.chats.create(addresses);
+      return { id: chat.guid as string, type: "group" as const };
     },
   },
 
