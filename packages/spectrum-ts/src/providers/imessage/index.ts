@@ -1,6 +1,7 @@
 import { createClient, directChat } from "@photon-ai/advanced-imessage";
 import { IMessageSDK } from "@photon-ai/imessage-kit";
 import { definePlatform } from "../../platform/define";
+import { createCloudClients, disposeCloudAuth } from "./auth";
 import { messages as localMessages, send as localSend } from "./local";
 import {
   messages as remoteMessages,
@@ -68,16 +69,25 @@ export const imessage = definePlatform("iMessage", {
   },
 
   lifecycle: {
-    createClient: async ({ config }): Promise<IMessageClient> => {
+    createClient: async ({
+      config,
+      projectId,
+      projectSecret,
+    }): Promise<IMessageClient> => {
       if (config.local) {
         return new IMessageSDK();
       }
 
-      const raw = config.clients ?? [];
-      const entries = Array.isArray(raw) ? raw : [raw];
-      return entries.map((e) =>
-        createClient({ address: e.address, tls: true, token: e.token })
-      );
+      if (config.clients) {
+        const entries = Array.isArray(config.clients)
+          ? config.clients
+          : [config.clients];
+        return entries.map((e) =>
+          createClient({ address: e.address, tls: true, token: e.token })
+        );
+      }
+
+      return await createCloudClients(projectId, projectSecret);
     },
 
     destroyClient: async ({ client }: { client: IMessageClient }) => {
@@ -85,6 +95,7 @@ export const imessage = definePlatform("iMessage", {
         await client.close();
         return;
       }
+      await disposeCloudAuth(client);
       await Promise.all(client.map((c) => c.close()));
     },
   },

@@ -138,7 +138,11 @@ export interface PlatformDef<
   events: _Events;
 
   lifecycle: {
-    createClient: (ctx: { config: z.infer<_ConfigSchema> }) => Promise<_Client>;
+    createClient: (ctx: {
+      config: z.infer<_ConfigSchema>;
+      projectId: string;
+      projectSecret: string;
+    }) => Promise<_Client>;
     destroyClient: (ctx: { client: _Client }) => Promise<void>;
   };
 

@@ -88,6 +88,8 @@ export async function Spectrum<
 
     const client = await def.lifecycle.createClient({
       config: userConfig,
+      projectId,
+      projectSecret,
     });
 
     platformStates.set(def.name, {
