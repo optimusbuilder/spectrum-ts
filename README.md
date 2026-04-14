@@ -605,40 +605,6 @@ bun x ultracite check   # Check for issues
 bun x ultracite fix     # Auto-fix
 ```
 
-### Project structure
-
-```
-spectrum-ts/
-├── packages/
-│   └── spectrum-ts/
-│       └── src/
-│           ├── index.ts              Library entry point
-│           ├── spectrum.ts           Spectrum factory and runtime
-│           ├── platform/
-│           │   ├── define.ts         definePlatform() factory
-│           │   └── types.ts          Type system (HotScript generics)
-│           ├── providers/
-│           │   ├── imessage/         iMessage platform provider
-│           │   │   ├── index.ts      Platform definition
-│           │   │   ├── types.ts      Config and space schemas
-│           │   │   ├── auth.ts       Cloud token management
-│           │   │   ├── local.ts      Local macOS SDK bridge
-│           │   │   └── remote.ts     gRPC client operations
-│           │   └── terminal/         Terminal platform provider
-│           │       └── index.ts      stdin/stdout adapter
-│           ├── types/
-│           │   ├── content.ts        Content builders (text, attachment, custom)
-│           │   ├── message.ts        Message interface
-│           │   ├── space.ts          Space interface
-│           │   └── user.ts           User interface
-│           └── utils/
-│               ├── stream.ts         Async stream primitives (Repeater)
-│               └── cloud.ts          Cloud URL configuration
-└── examples/
-    └── basic/
-        └── index.ts                  Usage example
-```
-
 ---
 
 ## License
