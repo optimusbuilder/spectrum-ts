@@ -15,7 +15,7 @@ import { terminal } from "spectrum-ts/providers/terminal";
 const app = await Spectrum("project-id", "project-secret", {
   providers: [
     imessage.config({ local: true }),
-    terminal.config({}),
+    terminal.config(),
   ],
 });
 
@@ -371,7 +371,7 @@ imessage.config({ local: true })
 Authenticates with Spectrum Cloud and connects to managed iMessage infrastructure via gRPC. Supports the full feature set: send, receive, typing indicators, reactions, replies, and group chat creation.
 
 ```typescript
-imessage.config({})
+imessage.config()
 ```
 
 Authentication is handled automatically. Tokens are renewed at 80% of their TTL.
@@ -420,7 +420,7 @@ import { terminal } from "spectrum-ts/providers/terminal";
 A minimal platform provider that reads from `stdin` and writes to `stdout`. Useful for local development and testing.
 
 ```typescript
-terminal.config({})
+terminal.config()
 ```
 
 Each line of input becomes a message. Text content sent to the terminal space is printed to the console. Typing indicators and reactions are no-ops.
@@ -535,7 +535,7 @@ export const myPlatform = definePlatform("my-platform", {
 
 | Field | Required | Description |
 |-------|----------|-------------|
-| `config` | Yes | A Zod schema that validates the object passed to `platform.config()`. |
+| `config` | Yes | A Zod schema that validates the object passed to `platform.config()`. When all fields are optional, `platform.config()` can be called with no arguments. |
 | `user.resolve` | Yes | Resolves a user from a string ID. Returns at minimum `{ id: string }`. |
 | `space.resolve` | Yes | Resolves or creates a conversation. Receives an array of users and optional params. |
 | `space.schema` | No | A Zod schema for validating and typing the resolved space. |

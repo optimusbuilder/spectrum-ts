@@ -289,7 +289,9 @@ export function definePlatform<
     throw new Error("Invalid input to platform narrowing function");
   }) as Platform<Def>;
 
-  narrower.config = (config: z.input<_ConfigSchema>) => {
+  narrower.config = (
+    config: z.input<_ConfigSchema> = {} as z.input<_ConfigSchema>
+  ) => {
     return {
       __tag: "PlatformProviderConfig" as const,
       __def: undefined as unknown as Def,
