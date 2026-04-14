@@ -48,7 +48,6 @@ for await (const [space, message] of app.messages) {
 - [Building a Custom Platform Provider](#building-a-custom-platform-provider)
 - [Environment Variables](#environment-variables)
 - [Development](#development)
-- [Architecture](#architecture)
 
 ---
 
@@ -639,28 +638,6 @@ spectrum-ts/
     └── basic/
         └── index.ts                  Usage example
 ```
-
----
-
-## Architecture
-
-### Type inference pipeline
-
-Spectrum uses [HotScript](https://github.com/gvergnaud/hotscript) for type-level programming. When you pass platform providers to `Spectrum()`, the return type is computed at compile time:
-
-1. Each platform provider's `config()` call captures its `PlatformDef` as a type parameter.
-2. The `providers` tuple preserves exact types via `const` generic inference.
-3. `SpectrumInstance<Providers>` uses HotScript's `Pipe` and `Tuples` to extract custom event names, unify event payloads, and check platform membership — all at the type level.
-
-This means `app.messages` yields messages typed as the union of all registered platforms, `imessage(app)` is statically verified to succeed only when iMessage is in the providers list, and custom event streams like `app.typing` resolve to the correct payload types automatically.
-
-### Stream architecture
-
-All async iteration is built on [@repeaterjs/repeater](https://repeater.js.org), wrapped in a `ManagedStream<T>` interface that adds a `close()` method for teardown. The `mergeStreams` utility combines multiple platform provider streams into one, with proper cleanup propagation when any stream ends or the instance is stopped.
-
-### Platform narrowing
-
-The callable returned by `definePlatform` acts as a universal narrowing function. It inspects the shape of its argument to determine whether it's a Spectrum instance, a space, or a message, then returns the appropriately typed platform-specific version. Results are cached per-instance via `WeakMap` to avoid redundant setup.
 
 ---
 
