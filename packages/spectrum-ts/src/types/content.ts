@@ -1,7 +1,6 @@
 import { readFile } from "node:fs/promises";
 import { basename } from "node:path";
 import { lookup as lookupMimeType } from "mime-types";
-import type { NonEmptyString } from "type-fest";
 import z from "zod";
 
 const DEFAULT_ATTACHMENT_NAME = "attachment";
@@ -29,9 +28,7 @@ export interface ContentBuilder {
   build(): Promise<Content>;
 }
 
-export function text(
-  text: string
-): ContentBuilder {
+export function text(text: string): ContentBuilder {
   return {
     build: (): Promise<Content> =>
       Promise.resolve({ type: "plain_text", text }),
