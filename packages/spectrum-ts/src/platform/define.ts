@@ -1,9 +1,12 @@
 import type z from "zod";
 import type { Message } from "../types/message";
 import type { Space } from "../types/space";
+import type { Store } from "../utils/store";
 import { buildSpace } from "./build";
 import type {
   AnyPlatformDef,
+  CreateClientContext,
+  EventProducer,
   InboundPlatformMessage,
   Platform,
   PlatformDef,
@@ -16,6 +19,8 @@ import type {
   ProviderMessage,
   SpectrumLike,
 } from "./types";
+
+type NoInferValue<T> = [T][T extends unknown ? 0 : never];
 
 function createPlatformInstance<
   Def extends AnyPlatformDef,
@@ -36,6 +41,7 @@ function createPlatformInstance<
       input: { userID },
       client: runtime.client as _Client,
       config: runtime.config as z.infer<_ConfigSchema>,
+      store: runtime.store,
     });
     return {
       ...resolved,
@@ -98,6 +104,7 @@ function createPlatformInstance<
         input: { userID },
         client: runtime.client as _Client,
         config: runtime.config as z.infer<_ConfigSchema>,
+        store: runtime.store,
       });
       return {
         ...resolved,
@@ -116,11 +123,13 @@ function createPlatformInstance<
         input: { users, params: parsedParams },
         client: runtime.client as _Client,
         config: runtime.config as z.infer<_ConfigSchema>,
+        store: runtime.store,
       });
       const parsedSpace = def.space.schema
         ? def.space.schema.parse(resolved)
         : resolved;
       const spaceRef = {
+        ...(parsedSpace as Record<string, unknown>),
         id: parsedSpace.id,
         __platform: def.name,
       };
@@ -128,6 +137,7 @@ function createPlatformInstance<
         space: spaceRef,
         client: runtime.client as _Client,
         config: runtime.config as z.infer<_ConfigSchema>,
+        store: runtime.store,
       };
       return buildSpace({
         spaceRef,
@@ -136,6 +146,7 @@ function createPlatformInstance<
         definition: def as unknown as AnyPlatformDef,
         client: runtime.client,
         config: runtime.config,
+        store: runtime.store,
       }) as PlatformSpace<Def>;
     },
   };
@@ -147,12 +158,17 @@ function createPlatformInstance<
       continue;
     }
     const producer = def.events[eventName] as
-      | ((ctx: { client: unknown; config: unknown }) => AsyncIterable<unknown>)
+      | ((ctx: {
+          client: unknown;
+          config: unknown;
+          store: Store;
+        }) => AsyncIterable<unknown>)
       | undefined;
     if (producer) {
       eventProperties[eventName] = producer({
         client: runtime.client,
         config: runtime.config,
+        store: runtime.store,
       });
     }
   }
@@ -199,20 +215,24 @@ export function definePlatform<
       : Record<never, never>
   >,
   _Events extends {
-    messages: (ctx: {
-      client: _Client;
-      config: z.infer<_ConfigSchema>;
-    }) => AsyncIterable<_MessageType>;
+    messages: EventProducer<_MessageType, _Client, z.infer<_ConfigSchema>>;
   } = {
-    messages: (ctx: {
-      client: _Client;
-      config: z.infer<_ConfigSchema>;
-    }) => AsyncIterable<_MessageType>;
+    messages: EventProducer<_MessageType, _Client, z.infer<_ConfigSchema>>;
   },
   _Static extends Record<string, unknown> = Record<never, never>,
 >(
   name: _Name,
-  def: Omit<
+  def: {
+    lifecycle: {
+      createClient: (
+        ctx: CreateClientContext<_ConfigSchema>
+      ) => Promise<_Client>;
+      destroyClient?: (ctx: {
+        client: NoInferValue<_Client>;
+        store: Store;
+      }) => Promise<void>;
+    };
+  } & Omit<
     PlatformDef<
       _Name,
       _ConfigSchema,
@@ -226,7 +246,7 @@ export function definePlatform<
       _MessageType,
       _Events
     >,
-    "name"
+    "lifecycle" | "name"
   > & { static?: _Static }
 ): Platform<
   PlatformDef<

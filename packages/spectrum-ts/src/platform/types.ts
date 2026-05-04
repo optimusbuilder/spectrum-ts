@@ -4,14 +4,16 @@ import type { Content } from "../content/types";
 import type { InboundMessage, Message } from "../types/message";
 import type { Space } from "../types/space";
 import type { User } from "../types/user";
+import type { Store } from "../utils/store";
 import type { ManagedStream } from "../utils/stream";
 
 type ResolvedSpace = Pick<Space, "id">;
 type SpaceRef = Pick<Space, "id" | "__platform">;
 type ResolvedUser = Pick<User, "id">;
-type AwaitedReturn<T> = T extends (...args: never[]) => Promise<infer R>
-  ? R
+type AwaitedReturn<T> = T extends (...args: never[]) => infer R
+  ? Awaited<R>
   : never;
+type NoInferClient<T> = [T][T extends unknown ? 0 : never];
 type SchemaInfer<T> = T extends { schema?: infer S extends z.ZodType<object> }
   ? z.infer<S>
   : Record<never, never>;
@@ -31,7 +33,11 @@ export type EventProducer<
   TPayload = unknown,
   TClient = unknown,
   TConfig = unknown,
-> = (ctx: { client: TClient; config: TConfig }) => AsyncIterable<TPayload>;
+> = (ctx: {
+  client: NoInferClient<TClient>;
+  config: TConfig;
+  store: Store;
+}) => AsyncIterable<TPayload>;
 
 export type ProviderMessage<
   TSender extends ResolvedUser = ResolvedUser,
@@ -95,6 +101,13 @@ type ReservedNames = "stop" | "send" | "__internal" | "__providers";
 // PlatformDef — the full definition of a platform adapter
 // ---------------------------------------------------------------------------
 
+export interface CreateClientContext<_ConfigSchema extends z.ZodType<object>> {
+  config: z.infer<_ConfigSchema>;
+  projectId: string | undefined;
+  projectSecret: string | undefined;
+  store: Store;
+}
+
 export interface PlatformDef<
   _Name extends string = string,
   _ConfigSchema extends z.ZodType<object> = z.ZodType<object>,
@@ -124,46 +137,53 @@ export interface PlatformDef<
     send: (_: {
       space: _ResolvedSpace & SpaceRef;
       content: Content;
-      client: _Client;
+      client: NoInferClient<_Client>;
       config: z.infer<_ConfigSchema>;
+      store: Store;
     }) => Promise<ProviderMessageRecord>;
     startTyping?: (_: {
       space: _ResolvedSpace & SpaceRef;
-      client: _Client;
+      client: NoInferClient<_Client>;
       config: z.infer<_ConfigSchema>;
+      store: Store;
     }) => Promise<void>;
     stopTyping?: (_: {
       space: _ResolvedSpace & SpaceRef;
-      client: _Client;
+      client: NoInferClient<_Client>;
       config: z.infer<_ConfigSchema>;
+      store: Store;
     }) => Promise<void>;
     reactToMessage?: (_: {
       space: _ResolvedSpace & SpaceRef;
       target: _MessageType;
       reaction: string;
-      client: _Client;
+      client: NoInferClient<_Client>;
       config: z.infer<_ConfigSchema>;
+      store: Store;
     }) => Promise<void>;
     replyToMessage?: (_: {
       space: _ResolvedSpace & SpaceRef;
       messageId: string;
       target: _MessageType;
       content: Content;
-      client: _Client;
+      client: NoInferClient<_Client>;
       config: z.infer<_ConfigSchema>;
+      store: Store;
     }) => Promise<ProviderMessageRecord>;
     editMessage?: (_: {
       space: _ResolvedSpace & SpaceRef;
       messageId: string;
       content: Content;
-      client: _Client;
+      client: NoInferClient<_Client>;
       config: z.infer<_ConfigSchema>;
+      store: Store;
     }) => Promise<void>;
     getMessage?: (_: {
       space: _ResolvedSpace & SpaceRef;
       messageId: string;
-      client: _Client;
+      client: NoInferClient<_Client>;
       config: z.infer<_ConfigSchema>;
+      store: Store;
     }) => Promise<_MessageType | undefined>;
   };
 
@@ -172,12 +192,11 @@ export interface PlatformDef<
   events: _Events;
 
   lifecycle: {
-    createClient: (ctx: {
-      config: z.infer<_ConfigSchema>;
-      projectId: string | undefined;
-      projectSecret: string | undefined;
-    }) => Promise<_Client>;
-    destroyClient: (ctx: { client: _Client }) => Promise<void>;
+    createClient: (ctx: CreateClientContext<_ConfigSchema>) => Promise<_Client>;
+    destroyClient?: (ctx: {
+      client: NoInferClient<_Client>;
+      store: Store;
+    }) => Promise<void>;
   };
 
   message?: {
@@ -195,8 +214,9 @@ export interface PlatformDef<
           ? z.infer<_SpaceParamsSchema>
           : undefined;
       };
-      client: _Client;
+      client: NoInferClient<_Client>;
       config: z.infer<_ConfigSchema>;
+      store: Store;
     }) => Promise<_ResolvedSpace>;
   };
 
@@ -204,8 +224,9 @@ export interface PlatformDef<
     schema?: _UserSchema;
     resolve: (_: {
       input: { userID: string };
-      client: _Client;
+      client: NoInferClient<_Client>;
       config: z.infer<_ConfigSchema>;
+      store: Store;
     }) => Promise<_ResolvedUser>;
   };
 }
@@ -242,7 +263,7 @@ export interface AnyPlatformDef {
     // biome-ignore lint/suspicious/noExplicitAny: wildcard lifecycle
     createClient: (ctx: any) => Promise<any>;
     // biome-ignore lint/suspicious/noExplicitAny: wildcard lifecycle
-    destroyClient: (ctx: any) => Promise<void>;
+    destroyClient?: (ctx: any) => Promise<void>;
   };
   message?: { schema?: z.ZodType<object> };
   name: string;
@@ -459,6 +480,7 @@ export interface PlatformRuntime {
   client: unknown;
   config: unknown;
   definition: AnyPlatformDef;
+  store: Store;
   subscribeMessages: () => ManagedStream<[Space, InboundMessage]>;
 }
 

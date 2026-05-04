@@ -26,12 +26,14 @@ import {
   startTyping as remoteStartTyping,
   stopTyping as remoteStopTyping,
 } from "./remote/api";
+import { clientForPhone, randomPhone } from "./remote/client";
 import {
   configSchema,
   type IMessageClient,
   type IMessageMessage,
   isLocal,
   messageSchema,
+  spaceParamsSchema,
   spaceSchema,
 } from "./types";
 
@@ -45,48 +47,6 @@ export const imessage = definePlatform("iMessage", {
     effect: {
       message: MessageEffect,
     },
-  },
-
-  user: {
-    resolve: async ({ input }) => ({ id: input.userID }),
-  },
-
-  space: {
-    schema: spaceSchema,
-    resolve: async ({ input, client }) => {
-      if (isLocal(client)) {
-        throw UnsupportedError.action(
-          "createSpace",
-          "iMessage (local mode)",
-          "local mode only supports replying to existing messages"
-        );
-      }
-
-      if (input.users.length === 0) {
-        throw new Error("iMessage space creation requires at least one user");
-      }
-
-      const addresses = input.users.map((u) => u.id);
-
-      if (input.users.length === 1) {
-        return {
-          id: directChat(addresses[0] ?? "") as string,
-          type: "dm" as const,
-        };
-      }
-
-      const remote = client[0];
-      if (!remote) {
-        throw new Error("No remote iMessage client available");
-      }
-
-      const { chat } = await remote.chats.create(addresses);
-      return { id: chat.guid as string, type: "group" as const };
-    },
-  },
-
-  message: {
-    schema: messageSchema,
   },
 
   lifecycle: {
@@ -103,9 +63,14 @@ export const imessage = definePlatform("iMessage", {
         const entries = Array.isArray(config.clients)
           ? config.clients
           : [config.clients];
-        return entries.map((e) =>
-          createClient({ address: e.address, tls: true, token: e.token })
-        );
+        return entries.map((e) => ({
+          phone: e.phone,
+          client: createClient({
+            address: e.address,
+            tls: true,
+            token: e.token,
+          }),
+        }));
       }
 
       if (!(projectId && projectSecret)) {
@@ -119,14 +84,58 @@ export const imessage = definePlatform("iMessage", {
       return await createCloudClients(projectId, projectSecret);
     },
 
-    destroyClient: async ({ client }: { client: IMessageClient }) => {
+    destroyClient: async ({ client }) => {
       if (isLocal(client)) {
         await client.close();
         return;
       }
       await disposeCloudAuth(client);
-      await Promise.all(client.map((c) => c.close()));
+      await Promise.all(client.map((entry) => entry.client.close()));
     },
+  },
+
+  user: {
+    resolve: async ({ input }) => ({ id: input.userID }),
+  },
+
+  space: {
+    schema: spaceSchema,
+    params: spaceParamsSchema,
+    resolve: async ({ input, client }) => {
+      if (isLocal(client)) {
+        throw UnsupportedError.action(
+          "createSpace",
+          "iMessage (local mode)",
+          "local mode only supports replying to existing messages"
+        );
+      }
+
+      if (input.users.length === 0) {
+        throw new Error("iMessage space creation requires at least one user");
+      }
+
+      if (client.length === 0) {
+        throw new Error("No iMessage clients configured");
+      }
+      const phone = input.params?.phone ?? randomPhone(client);
+      const remote = clientForPhone(client, phone);
+      const addresses = input.users.map((u) => u.id);
+
+      if (input.users.length === 1) {
+        return {
+          id: directChat(addresses[0] ?? "") as string,
+          type: "dm" as const,
+          phone,
+        };
+      }
+
+      const { chat } = await remote.chats.create(addresses);
+      return { id: chat.guid as string, type: "group" as const, phone };
+    },
+  },
+
+  message: {
+    schema: messageSchema,
   },
 
   events: {
@@ -139,19 +148,22 @@ export const imessage = definePlatform("iMessage", {
       if (isLocal(client)) {
         return await localSend(client, space.id, content);
       }
-      return await remoteSend(client, space.id, content);
+      const remote = clientForPhone(client, space.phone);
+      return await remoteSend(remote, space.id, content);
     },
     startTyping: async ({ space, client }) => {
       if (isLocal(client)) {
         return;
       }
-      await remoteStartTyping(client, space.id);
+      const remote = clientForPhone(client, space.phone);
+      await remoteStartTyping(remote, space.id);
     },
     stopTyping: async ({ space, client }) => {
       if (isLocal(client)) {
         return;
       }
-      await remoteStopTyping(client, space.id);
+      const remote = clientForPhone(client, space.phone);
+      await remoteStopTyping(remote, space.id);
     },
     reactToMessage: async ({ space, target, reaction, client }) => {
       if (isLocal(client)) {
@@ -164,8 +176,9 @@ export const imessage = definePlatform("iMessage", {
           "iMessage polls do not support reactions"
         );
       }
+      const remote = clientForPhone(client, space.phone);
       await remoteReactToMessage(
-        client,
+        remote,
         space.id,
         target as IMessageMessage,
         reaction
@@ -182,19 +195,22 @@ export const imessage = definePlatform("iMessage", {
           "iMessage polls do not support replies"
         );
       }
-      return await remoteReplyToMessage(client, space.id, messageId, content);
+      const remote = clientForPhone(client, space.phone);
+      return await remoteReplyToMessage(remote, space.id, messageId, content);
     },
     editMessage: async ({ space, messageId, content, client }) => {
       if (isLocal(client)) {
         throw UnsupportedError.action("edit", "iMessage (local mode)");
       }
-      await remoteEditMessage(client, space.id, messageId, content);
+      const remote = clientForPhone(client, space.phone);
+      await remoteEditMessage(remote, space.id, messageId, content);
     },
     getMessage: async ({ space, messageId, client }) => {
       if (isLocal(client)) {
         return localGetMessage(client, messageId);
       }
-      return remoteGetMessage(client, space.id, messageId);
+      const remote = clientForPhone(client, space.phone);
+      return remoteGetMessage(remote, space.id, messageId, space.phone);
     },
   },
 });
