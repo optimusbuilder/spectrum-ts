@@ -22,7 +22,6 @@ export const setBackground = async (
   const buffer = await content.action.read();
   await remote.chats.setBackground(
     chat,
-    new Uint8Array(buffer.buffer, buffer.byteOffset, buffer.byteLength),
-    content.action.mimeType
+    new Uint8Array(buffer.buffer, buffer.byteOffset, buffer.byteLength)
   );
 };
