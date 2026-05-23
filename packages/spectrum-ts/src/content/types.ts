@@ -1,5 +1,6 @@
 import z from "zod";
 import { attachmentSchema } from "./attachment";
+import { avatarSchema } from "./avatar";
 import { contactSchema } from "./contact";
 import { customSchema } from "./custom";
 import { editSchema } from "./edit";
@@ -7,6 +8,7 @@ import { messageEffectSchema } from "./effect";
 import { groupSchema } from "./group";
 import { pollOptionSchema, pollSchema } from "./poll";
 import { reactionSchema } from "./reaction";
+import { renameSchema } from "./rename";
 import { replySchema } from "./reply";
 import { richlinkSchema } from "./richlink";
 import { textSchema } from "./text";
@@ -31,6 +33,8 @@ const baseContentSchemas = [
   pollOptionSchema,
   messageEffectSchema,
   typingSchema,
+  renameSchema,
+  avatarSchema,
 ] as const;
 
 export const baseContentSchema = z.discriminatedUnion(
