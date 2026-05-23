@@ -9,8 +9,7 @@ import type {
   AnyPlatformDef,
   CreateClientContext,
   EventProducer,
-  InboundPlatformMessage,
-  MessageActionFactory,
+  MessageActionFn,
   Platform,
   PlatformDef,
   PlatformInstance,
@@ -20,7 +19,7 @@ import type {
   PlatformSpace,
   PlatformUser,
   ProviderMessage,
-  SpaceActionFactory,
+  SpaceActionFn,
   SpectrumLike,
 } from "./types";
 
@@ -208,13 +207,13 @@ function createPlatformInstance<
   // Lazily subscribe to the platform's message broadcast on first read.
   // Cached so `for await (const x of im.messages)` twice doesn't double-subscribe.
   let messagesIterable:
-    | AsyncIterable<[PlatformSpace<Def>, InboundPlatformMessage<Def>]>
+    | AsyncIterable<[PlatformSpace<Def>, PlatformMessage<Def>]>
     | undefined;
   Object.defineProperty(base, "messages", {
     enumerable: true,
     get() {
       messagesIterable ??= runtime.subscribeMessages() as AsyncIterable<
-        [PlatformSpace<Def>, InboundPlatformMessage<Def>]
+        [PlatformSpace<Def>, PlatformMessage<Def>]
       >;
       return messagesIterable;
     },
@@ -253,11 +252,8 @@ export function definePlatform<
       > & { messages?: never })
     | undefined = undefined,
   _Static extends Record<string, unknown> = Record<never, never>,
-  _SpaceActions extends Record<string, SpaceActionFactory> = Record<
-    never,
-    never
-  >,
-  _MessageActions extends Record<string, MessageActionFactory> = Record<
+  _SpaceActions extends Record<string, SpaceActionFn> = Record<never, never>,
+  _MessageActions extends Record<string, MessageActionFn> = Record<
     never,
     never
   >,
