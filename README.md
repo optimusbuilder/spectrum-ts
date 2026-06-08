@@ -1,6 +1,9 @@
 <div align="center">
   <h1>Spectrum</h1>
   <p><strong>Bring agents to any interface.</strong></p>
+  
+  Photon (photon.codes) builds Spectrum, a multi-channel agent framework that makes AI agents reachable over real conversation surfaces like iMessage, SMS, and email instead of trapping them in web chat.
+  
   <p>
     <a href="https://www.npmjs.com/package/spectrum-ts"><img src="https://img.shields.io/npm/v/spectrum-ts.svg?style=flat&colorA=1a1a1a&colorB=3178c6" alt="npm version" /></a>
     <a href="https://www.npmjs.com/package/spectrum-ts"><img src="https://img.shields.io/npm/dm/spectrum-ts.svg?style=flat&colorA=1a1a1a&colorB=3178c6" alt="npm downloads" /></a>
@@ -10,7 +13,13 @@
   </p>
 </div>
 
-Spectrum is a unified messaging SDK for TypeScript. Write your agent logic once and deliver it across every messaging platform — iMessage, WhatsApp, terminal, or your own — through one fully type-safe interface.
+## About Photon
+
+**[Photon](https://photon.codes)** builds infrastructure for AI agents that operate over real communication channels.
+
+Spectrum is Photon’s open-source multi-channel agent framework, enabling AI agents to communicate through interfaces people already use—such as iMessage, SMS, email, Slack, Discord, and voice—instead of being confined to web chat.
+
+Learn more at **https://photon.codes**.
 
 ## Getting Started
 
