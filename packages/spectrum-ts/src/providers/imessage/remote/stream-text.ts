@@ -35,6 +35,19 @@ export const sendStreamText = async (
   spaceId: string,
   content: StreamText
 ): Promise<ProviderMessageRecord> => {
+  if (content.format === "markdown") {
+    // Thrown before the stream is consumed, so the send pipeline's fallback
+    // can drain it and deliver the accumulated text through the `markdown`
+    // chain — which lands a natively formatted message (text + UTF-16
+    // formatting ranges). Streaming it here is impossible: this driver edits
+    // the message in place and `messages.edit` carries no formatting, so
+    // mid-stream updates would expose literal markdown source and the final
+    // flush could never restore the styling.
+    throw unsupportedRemoteContent(
+      "streamText",
+      "markdown-formatted streams have no native iMessage delivery"
+    );
+  }
   const chat = toChatGuid(spaceId);
 
   let sent: SDKMessage | undefined; // the first (and only) message we created

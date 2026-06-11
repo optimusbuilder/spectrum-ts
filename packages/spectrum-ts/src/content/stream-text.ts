@@ -9,8 +9,9 @@ import type { ContentBuilder } from "./types";
 export type DeltaExtractor<T> = (chunk: T) => string | null | undefined;
 
 /**
- * Anything `streamText()` accepts as a source. The builder normalizes all of
- * these to an internal `AsyncIterable<string>` of text deltas:
+ * Anything the stream overloads of `text()` and `markdown()` accept as a
+ * source. The builder normalizes all of these to an internal
+ * `AsyncIterable<string>` of text deltas:
  *
  * - the Vercel AI SDK `streamText()` result (its `.textStream` is picked up
  *   automatically — pass either the whole result or `.textStream` directly),
@@ -22,7 +23,7 @@ export type StreamTextSource<T = unknown> =
   | AsyncIterable<T>
   | ReadableStream<T>;
 
-export interface StreamTextOptions<T = unknown> {
+export interface TextStreamOptions<T = unknown> {
   /**
    * Map each chunk to its incremental text. Omit to rely on built-in
    * auto-detection of the common SDK shapes (OpenAI chat/responses, Anthropic
@@ -43,6 +44,8 @@ export const streamTextSchema = z.object({
         "streamText.stream must be a function returning AsyncIterable<string>",
     }
   ),
+  // How platforms should interpret the accumulated text; absent = plain.
+  format: z.enum(["plain", "markdown"]).optional(),
 });
 
 export type StreamText = z.infer<typeof streamTextSchema>;
@@ -134,7 +137,7 @@ const OBJECT_EXTRACTORS: ReadonlyArray<
 
 /**
  * Auto-detect the text delta in a chunk from a popular LLM SDK. Pass a custom
- * `extract` to `streamText()` for any shape this doesn't recognize.
+ * `extract` to `text()` / `markdown()` for any shape this doesn't recognize.
  */
 const defaultExtract: DeltaExtractor<unknown> = (chunk) => {
   if (typeof chunk === "string") {
@@ -143,7 +146,7 @@ const defaultExtract: DeltaExtractor<unknown> = (chunk) => {
   const record = asRecord(chunk);
   if (!record) {
     throw new Error(
-      `streamText: cannot extract a text delta from a ${typeof chunk} chunk. Pass { extract } to map your stream's chunks to text.`
+      `text stream: cannot extract a text delta from a ${typeof chunk} chunk. Pass { extract } to map your stream's chunks to text.`
     );
   }
   for (const extractor of OBJECT_EXTRACTORS) {
@@ -153,7 +156,7 @@ const defaultExtract: DeltaExtractor<unknown> = (chunk) => {
     }
   }
   throw new Error(
-    `streamText: unrecognized chunk shape (type=${String(record.type)}). Pass an { extract } function to map your provider's chunk to a text delta.`
+    `text stream: unrecognized chunk shape (type=${String(record.type)}). Pass an { extract } function to map your provider's chunk to a text delta.`
   );
 };
 
@@ -201,7 +204,7 @@ const resolveChunkIterable = <T>(
       return textStream;
     }
     throw new Error(
-      "streamText: `.textStream` must be an AsyncIterable or a ReadableStream."
+      "text stream: `.textStream` must be an AsyncIterable or a ReadableStream."
     );
   }
   if (isReadableStream(source)) {
@@ -211,7 +214,7 @@ const resolveChunkIterable = <T>(
     return source;
   }
   throw new Error(
-    "streamText: source must be an AsyncIterable, a ReadableStream, or an object with a `.textStream` (e.g. the AI SDK streamText() result)."
+    "text stream: source must be an AsyncIterable, a ReadableStream, or an object with a `.textStream` (e.g. the AI SDK streamText() result)."
   );
 };
 
@@ -223,7 +226,7 @@ const resolveChunkIterable = <T>(
 export class StreamConsumedError extends Error {
   constructor() {
     super(
-      "streamText: this source has already been consumed — a stream can only be sent once."
+      "text stream: this source has already been consumed — a stream can only be sent once."
     );
     this.name = "StreamConsumedError";
   }
@@ -231,7 +234,7 @@ export class StreamConsumedError extends Error {
 
 const normalize = <T>(
   source: StreamTextSource<T>,
-  options?: StreamTextOptions<T>
+  options?: TextStreamOptions<T>
 ): (() => AsyncIterable<string>) => {
   const extract: DeltaExtractor<unknown> = options?.extract
     ? (options.extract as DeltaExtractor<unknown>)
@@ -253,8 +256,13 @@ const normalize = <T>(
 
 export const asStreamText = (input: {
   stream: () => AsyncIterable<string>;
+  format?: "plain" | "markdown";
 }): StreamText =>
-  streamTextSchema.parse({ type: "streamText", stream: input.stream });
+  streamTextSchema.parse({
+    type: "streamText",
+    stream: input.stream,
+    ...(input.format ? { format: input.format } : {}),
+  });
 
 /**
  * Consume a `streamText` content's stream to completion and return the full
@@ -271,22 +279,25 @@ export const drainStreamText = async (content: StreamText): Promise<string> => {
 };
 
 /**
- * Wrap a streaming LLM text response so it can be sent like any other content.
- *
- * Delivery is platform-specific — iMessage (remote) sends the first chunk as a
- * real message and then edits it in place as more text arrives; Telegram
- * (private chats) animates a native draft preview and persists the final text
- * as one message. Platforms that can't stream wait for the stream to finish
- * and deliver the accumulated text as one plain message.
- *
- * Accepts whatever the popular SDKs return; pass `options.extract` for any
- * chunk shape the built-in detection doesn't recognize.
+ * Shared backing for the stream overloads of `text()` and `markdown()`: the
+ * constructor name picks the wire format and labels the eager guard against
+ * passing a content builder where a raw stream source belongs.
  */
-export function streamText<T = unknown>(
+export const streamTextBuilder = <T>(
+  kind: "text" | "markdown",
   source: StreamTextSource<T>,
-  options?: StreamTextOptions<T>
-): ContentBuilder {
+  options?: TextStreamOptions<T>
+): ContentBuilder => {
+  if (typeof (source as { build?: unknown }).build === "function") {
+    throw new Error(
+      `${kind}(): pass the stream source itself (an AsyncIterable, a ReadableStream, or an SDK result with .textStream), not another content builder.`
+    );
+  }
   return {
-    build: async () => asStreamText({ stream: normalize(source, options) }),
+    build: async () =>
+      asStreamText({
+        stream: normalize(source, options),
+        format: kind === "markdown" ? "markdown" : undefined,
+      }),
   };
-}
+};

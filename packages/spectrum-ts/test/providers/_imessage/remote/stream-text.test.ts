@@ -4,7 +4,9 @@ import type {
   Message as SDKMessage,
 } from "@photon-ai/advanced-imessage";
 import { IMessageSDK } from "@photon-ai/imessage-kit";
-import { type StreamText, streamText } from "@/content/stream-text";
+import { markdown } from "@/content/markdown";
+import type { StreamText } from "@/content/stream-text";
+import { text } from "@/content/text";
 import { imessage } from "@/providers/imessage";
 import { sendStreamText } from "@/providers/imessage/remote/stream-text";
 import { UnsupportedError } from "@/utils/errors";
@@ -60,13 +62,31 @@ function timed(items: string[], stepMs: number): AsyncIterable<string> {
 }
 
 const build = async (source: AsyncIterable<string>): Promise<StreamText> =>
-  (await streamText(source).build()) as StreamText;
+  (await text(source).build()) as StreamText;
 
 // `editArgs` → the new-text argument of each edit call, in order.
 const editArgs = (edit: ReturnType<typeof makeRemote>["edit"]): string[] =>
   edit.mock.calls.map((call) => call[2]);
 
 describe("sendStreamText", () => {
+  it("rejects a markdown-formatted stream before consuming it", async () => {
+    const { remote, sendText, edit } = makeRemote();
+    let pulled = false;
+    async function* tracking(): AsyncIterable<string> {
+      pulled = true;
+      yield "x";
+    }
+    const content = (await markdown(tracking()).build()) as StreamText;
+
+    await expect(
+      sendStreamText(remote, "chat", content)
+    ).rejects.toBeInstanceOf(UnsupportedError);
+    // The stream stays drainable for the pipeline's markdown fallback chain.
+    expect(pulled).toBe(false);
+    expect(sendText).not.toHaveBeenCalled();
+    expect(edit).not.toHaveBeenCalled();
+  });
+
   it("sends the first delta then flushes the full text on completion", async () => {
     setSystemTime(new Date(0)); // freeze: no time passes, so no interim edits
     const { remote, sendText, edit } = makeRemote();

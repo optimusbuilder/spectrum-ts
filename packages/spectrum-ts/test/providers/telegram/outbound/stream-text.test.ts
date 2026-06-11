@@ -8,7 +8,8 @@ import {
   setSystemTime,
   spyOn,
 } from "bun:test";
-import { streamText } from "@/content/stream-text";
+import { markdown } from "@/content/markdown";
+import { text } from "@/content/text";
 import { configSchema } from "@/providers/telegram/config";
 import { send } from "@/providers/telegram/outbound/send";
 import { UnsupportedError } from "@/utils/errors";
@@ -100,7 +101,7 @@ describe("telegram sendStreamText", () => {
   it("streams drafts and persists the full text with sendMessage", async () => {
     const result = await send({
       space,
-      content: await streamText(timed(["Hello", " world", "!"], 1000)).build(),
+      content: await text(timed(["Hello", " world", "!"], 1000)).build(),
       config,
     });
 
@@ -135,7 +136,7 @@ describe("telegram sendStreamText", () => {
     setSystemTime(new Date(BASE_MS)); // freeze: no time passes, no interim drafts
     await send({
       space,
-      content: await streamText(fromArray(["a", "b", "c"])).build(),
+      content: await text(fromArray(["a", "b", "c"])).build(),
       config,
     });
 
@@ -154,7 +155,7 @@ describe("telegram sendStreamText", () => {
     await expect(
       send({
         space: { id: "-100123" },
-        content: await streamText(tracking()).build(),
+        content: await text(tracking()).build(),
         config,
       })
     ).rejects.toBeInstanceOf(UnsupportedError);
@@ -166,7 +167,7 @@ describe("telegram sendStreamText", () => {
     await expect(
       send({
         space,
-        content: await streamText(fromArray([])).build(),
+        content: await text(fromArray([])).build(),
         config,
       })
     ).rejects.toBeInstanceOf(UnsupportedError);
@@ -180,7 +181,7 @@ describe("telegram sendStreamText", () => {
     failDrafts = true;
     const result = await send({
       space,
-      content: await streamText(timed(["a", "b", "c"], 1000)).build(),
+      content: await text(timed(["a", "b", "c"], 1000)).build(),
       config,
     });
 
@@ -188,6 +189,42 @@ describe("telegram sendStreamText", () => {
     expect(drafts()).toHaveLength(1);
     expect(finalSends().map((c) => c.json.text)).toEqual(["abc"]);
     expect(result?.id).toBe("555");
+  });
+
+  it("renders markdown drafts and the final send as HTML with parse_mode", async () => {
+    const result = await send({
+      space,
+      content: await markdown(timed(["**Hello", " world**"], 1000)).build(),
+      config,
+    });
+
+    // Each draft re-renders the accumulated markdown; an unclosed marker
+    // mid-stream stays literal text, so every preview is valid HTML.
+    expect(drafts().map((c) => [c.json.text, c.json.parse_mode])).toEqual([
+      ["", "HTML"],
+      ["**Hello", "HTML"],
+      ["<b>Hello world</b>", "HTML"],
+    ]);
+    expect(finalSends().map((c) => c.json)).toEqual([
+      { chat_id: "100", text: "<b>Hello world</b>", parse_mode: "HTML" },
+    ]);
+    // The record carries the markdown source, not the rendered HTML.
+    expect(result?.content).toEqual({
+      type: "markdown",
+      markdown: "**Hello world**",
+    });
+  });
+
+  it("keeps plain streams free of parse_mode", async () => {
+    await send({
+      space,
+      content: await text(timed(["hi"], 1000)).build(),
+      config,
+    });
+
+    for (const call of calls) {
+      expect(call.json.parse_mode).toBeUndefined();
+    }
   });
 
   it("propagates a mid-stream error without sending the message", async () => {
@@ -198,7 +235,7 @@ describe("telegram sendStreamText", () => {
     }
 
     await expect(
-      send({ space, content: await streamText(throwing()).build(), config })
+      send({ space, content: await text(throwing()).build(), config })
     ).rejects.toThrow(BOOM);
     expect(finalSends()).toEqual([]);
   });
