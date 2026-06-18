@@ -35,7 +35,11 @@ export type { ProviderMessageRecord } from "./platform/types";
 
 // Generic translation helpers (from `utils/`).
 export { ensureM4a } from "./utils/audio";
-export { renderInlineTokens } from "./utils/markdown";
+export {
+  markdownToSlack,
+  markdownToWhatsapp,
+  renderInlineTokens,
+} from "./utils/markdown";
 export {
   buildPhotoAction,
   type PhotoInput,
