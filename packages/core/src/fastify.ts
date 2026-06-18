@@ -100,7 +100,7 @@ export async function spectrum(
     const result = await app.webhook(
       {
         body: request.body as Buffer,
-        headers: request.headers as Record<string, string>,
+        headers: normalizeHeaders(request.headers),
       },
       onMessage
     );
@@ -110,6 +110,19 @@ export async function spectrum(
       .headers(result.headers)
       .send(Buffer.from(result.body));
   });
+}
+
+function normalizeHeaders(
+  headers: Record<string, string | string[] | undefined>
+): Record<string, string> {
+  const normalized: Record<string, string> = {};
+  for (const [key, value] of Object.entries(headers)) {
+    if (value === undefined) {
+      continue;
+    }
+    normalized[key] = Array.isArray(value) ? (value[0] ?? "") : value;
+  }
+  return normalized;
 }
 
 export type { WebhookHandler } from "./fusor";
