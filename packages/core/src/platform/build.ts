@@ -387,7 +387,7 @@ async function sendWithFallbacks(
       throw err;
     }
     platformLog.info(
-      `${platform} does not support markdown; sending the content as plain text instead.`,
+      `${platform} does not support markdown; sending downgraded content instead.`,
       {
         "spectrum.provider": platform,
         "spectrum.markdown.fallback": true,
