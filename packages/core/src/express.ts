@@ -86,7 +86,7 @@ export function spectrum(options: SpectrumPluginOptions): Router {
   const router = express.Router();
   router.post(path, express.raw({ type: "*/*" }), async (req, res) => {
     const result = await app.webhook(
-      { body: req.body, headers: req.headers as Record<string, string> },
+      { body: req.body, headers: normalizeHeaders(req.headers) },
       onMessage
     );
     res
@@ -95,6 +95,19 @@ export function spectrum(options: SpectrumPluginOptions): Router {
       .send(Buffer.from(result.body));
   });
   return router;
+}
+
+function normalizeHeaders(
+  headers: Record<string, string | string[] | undefined>
+): Record<string, string> {
+  const normalized: Record<string, string> = {};
+  for (const [key, value] of Object.entries(headers)) {
+    if (value === undefined) {
+      continue;
+    }
+    normalized[key] = Array.isArray(value) ? (value[0] ?? "") : value;
+  }
+  return normalized;
 }
 
 export type { WebhookHandler } from "./fusor";

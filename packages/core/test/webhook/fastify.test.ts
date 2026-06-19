@@ -1,4 +1,4 @@
-import { describe, expect, it } from "bun:test";
+import { afterAll, beforeAll, describe, expect, it } from "bun:test";
 import { stubCloud } from "@spectrum-ts/test-support/cloud";
 import {
   baseConfig,
@@ -18,8 +18,17 @@ import type { Message } from "@/types/message";
 
 stubCloud();
 
-// Don't let a host env secret leak into the wrong-secret case.
-process.env.SPECTRUM_WEBHOOK_SECRET = "";
+let originalSecret: string | undefined;
+
+beforeAll(() => {
+  originalSecret = process.env.SPECTRUM_WEBHOOK_SECRET;
+  // Don't let a host env secret leak into the wrong-secret case.
+  process.env.SPECTRUM_WEBHOOK_SECRET = "";
+});
+
+afterAll(() => {
+  process.env.SPECTRUM_WEBHOOK_SECRET = originalSecret;
+});
 
 const PLATFORM = "im";
 
